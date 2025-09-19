@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global base styles */
+body {
+  @apply bg-[#0b0b0f] text-[#e6e6f0];
+}
+
+/* Themed scrollbars (dark, subtle) */
+.themed-scrollbar {
+  scrollbar-width: thin;            /* Firefox */
+  scrollbar-color: #3b3b46 transparent;
+}
+
+.themed-scrollbar::-webkit-scrollbar {
+  width: 10px;                      /* Vertical */
+  height: 10px;                     /* Horizontal */
+}
+
+.themed-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.themed-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(99,102,241,0.35), rgba(236,72,153,0.35));
+  border-radius: 9999px;
+  border: 2px solid rgba(15,15,23,0.6); /* match bg, create pill */
+}
+
+.themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(99,102,241,0.55), rgba(236,72,153,0.55));
+}
+
+.themed-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}

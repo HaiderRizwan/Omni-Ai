@@ -1,0 +1,1052 @@
+import React, { useState, useRef, useEffect } from 'react';
+import FormattedMessage from '../ui/FormattedMessage';
+import { motion } from 'framer-motion';
+import safeLocalStorage from '../../../utils/localStorage';
+import { 
+  Send, 
+  Download, 
+  RefreshCw, 
+  User,
+  Palette,
+  Settings,
+  Shirt,
+  Eye,
+  Smile,
+  Sparkles,
+  Plus
+} from 'lucide-react';
+
+const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection = [], onAddToCollection }) => {
+  const [prompt, setPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedAvatar, setGeneratedAvatar] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [settings, setSettings] = useState({
+    gender: 'any',
+    age: 'adult',
+    style: 'realistic',
+    expression: 'neutral',
+    clothing: 'casual',
+    background: 'transparent',
+    hairStyle: 'any',
+    build: 'average',
+    ethnicity: 'any'
+  });
+  const [showSettings, setShowSettings] = useState(false);
+  const [customization, setCustomization] = useState({
+    hairColor: '#8B4513',
+    eyeColor: '#4A90E2',
+    skinTone: '#FDBCB4'
+  });
+
+  // Debug: Monitor generatedAvatar state changes
+  useEffect(() => {
+    console.log('🔄 generatedAvatar state changed:', generatedAvatar);
+  }, [generatedAvatar]);
+
+  // Sync local messages with incoming chat (same as ImageCreator)
+  useEffect(() => {
+    if (currentChat && Array.isArray(currentChat.messages)) {
+      console.log('Loading avatar chat messages:', currentChat.messages.length, 'messages');
+      console.log('Current chat serverId:', currentChat.serverId || currentChat._id);
+      
+      // Transform server-loaded messages: check for avatar property
+      const transformed = currentChat.messages.map((m, index) => {
+        console.log(`Avatar message ${index}:`, { 
+          type: m.type, 
+          role: m.role,
+          content: m.content, 
+          hasAvatar: !!m.avatar,
+          avatar: m.avatar
+        });
+        
+        // Handle both local format (type) and server format (role)
+        const messageType = m.type || (m.role === 'user' ? 'user' : 'assistant');
+        
+        // Check if message has avatar property from backend
+        console.log(`Checking message ${index} for avatar:`, {
+          hasM: !!m,
+          hasAvatar: !!m.avatar,
+          avatarValue: m.avatar,
+          avatarType: typeof m.avatar,
+          allKeys: Object.keys(m || {})
+        });
+        
+        if (m && m.avatar) {
+          console.log(`Message ${index} has avatar from backend:`, m.avatar);
+          
+          // Test if the stored avatar URL is still accessible
+          if (m.avatar.startsWith('http')) {
+            fetch(m.avatar, { method: 'HEAD' })
+              .then(testRes => {
+                console.log(`Avatar URL test for message ${index}:`, testRes.status, testRes.ok ? 'SUCCESS' : 'FAILED');
+              })
+              .catch(err => {
+                console.error(`Avatar URL test failed for message ${index}:`, err);
+              });
+          }
+          
+          return { 
+            ...m, 
+            type: messageType,
+            avatar: m.avatar // Explicitly preserve avatar field
+          };
+        }
+        
+        // Debug: Log all message properties to see what's available
+        console.log(`Message ${index} full object:`, m);
+        
+        return { 
+          ...m, 
+          type: messageType,
+          avatar: m.avatar // Explicitly preserve avatar field
+        };
+      });
+      
+      console.log('Transformed avatar messages:', transformed);
+      console.log('Final messages with avatars:', transformed.filter(m => m.avatar));
+      setMessages(transformed);
+    } else {
+      console.log('No chat or empty messages, clearing');
+      setMessages([]);
+    }
+  }, [currentChat?.messages, currentChat?.id, currentChat?.serverId]);
+
+  // Character presets for quick setup
+  const characterPresets = [
+    {
+      name: 'Professional',
+      settings: { gender: 'any', age: 'adult', style: 'realistic', expression: 'confident', clothing: 'formal', background: 'studio', hairStyle: 'any', build: 'average', ethnicity: 'any' },
+      customization: { hairColor: '#8B4513', eyeColor: '#4A90E2', skinTone: '#FDBCB4' }
+    },
+    {
+      name: 'Fantasy Hero',
+      settings: { gender: 'any', age: 'adult', style: 'realistic', expression: 'confident', clothing: 'creative', background: 'gradient', hairStyle: 'any', build: 'athletic', ethnicity: 'any' },
+      customization: { hairColor: '#DAA520', eyeColor: '#4A90E2', skinTone: '#E0AC69' }
+    },
+    {
+      name: 'Anime Character',
+      settings: { gender: 'any', age: 'teen', style: 'anime', expression: 'happy', clothing: 'casual', background: 'transparent', hairStyle: 'any', build: 'slim', ethnicity: 'any' },
+      customization: { hairColor: '#FF69B4', eyeColor: '#9370DB', skinTone: '#FDBCB4' }
+    },
+    {
+      name: 'Elderly Sage',
+      settings: { gender: 'any', age: 'elderly', style: 'realistic', expression: 'serious', clothing: 'formal', background: 'studio', hairStyle: 'any', build: 'average', ethnicity: 'any' },
+      customization: { hairColor: '#2F1B14', eyeColor: '#4A90E2', skinTone: '#C68642' }
+    }
+  ];
+
+  const applyPreset = (preset) => {
+    setSettings(preset.settings);
+    setCustomization(preset.customization);
+  };
+
+  // Build character-specific prompt for better avatar generation
+  const buildCharacterPrompt = (basePrompt, settings, customization) => {
+    let prompt = `character portrait, ${basePrompt}`;
+    
+    // Add character-specific details
+    if (settings.gender !== 'any') {
+      prompt += `, ${settings.gender}`;
+    }
+    
+    if (settings.age !== 'any') {
+      prompt += `, ${settings.age}`;
+    }
+    
+    if (settings.ethnicity !== 'any') {
+      prompt += `, ${settings.ethnicity}`;
+    }
+    
+    // Add physical characteristics
+    if (customization.skinTone) {
+      const skinTone = getSkinToneDescription(customization.skinTone);
+      if (skinTone) prompt += `, ${skinTone} skin`;
+    }
+    
+    if (customization.hairColor) {
+      const hairColor = getHairColorDescription(customization.hairColor);
+      if (hairColor) prompt += `, ${hairColor} hair`;
+    }
+    
+    if (settings.hairStyle !== 'any') {
+      prompt += `, ${settings.hairStyle} hair`;
+    }
+    
+    if (customization.eyeColor) {
+      const eyeColor = getEyeColorDescription(customization.eyeColor);
+      if (eyeColor) prompt += `, ${eyeColor} eyes`;
+    }
+    
+    if (settings.build !== 'average') {
+      prompt += `, ${settings.build} build`;
+    }
+    
+    // Add style and expression
+    if (settings.style !== 'realistic') {
+      prompt += `, ${settings.style} style`;
+    }
+    
+    if (settings.expression !== 'neutral') {
+      prompt += `, ${settings.expression} expression`;
+    }
+    
+    if (settings.clothing !== 'casual') {
+      prompt += `, wearing ${settings.clothing}`;
+    }
+    
+    // Add background
+    if (settings.background !== 'transparent') {
+      prompt += `, ${settings.background} background`;
+    }
+    
+    // Add character-specific keywords for better generation
+    prompt += ', detailed face, clear eyes, professional portrait, high quality, character design, single person, centered composition';
+    
+    return prompt;
+  };
+
+  // Helper functions to convert colors to descriptive text
+  const getSkinToneDescription = (color) => {
+    const skinTones = {
+      '#FDBCB4': 'fair',
+      '#F1C27D': 'light',
+      '#E0AC69': 'medium-light',
+      '#C68642': 'medium',
+      '#8D5524': 'medium-dark',
+      '#654321': 'dark',
+      '#3C2415': 'very dark'
+    };
+    return skinTones[color] || 'natural';
+  };
+
+  const getHairColorDescription = (color) => {
+    const hairColors = {
+      '#8B4513': 'brown',
+      '#654321': 'dark brown',
+      '#2F1B14': 'black',
+      '#DAA520': 'blonde',
+      '#FFD700': 'golden blonde',
+      '#FFA500': 'auburn',
+      '#DC143C': 'red',
+      '#800080': 'purple',
+      '#0000FF': 'blue',
+      '#FF69B4': 'pink'
+    };
+    return hairColors[color] || 'brown';
+  };
+
+  const getEyeColorDescription = (color) => {
+    const eyeColors = {
+      '#4A90E2': 'blue',
+      '#228B22': 'green',
+      '#8B4513': 'brown',
+      '#654321': 'dark brown',
+      '#2F1B14': 'black',
+      '#FFD700': 'amber',
+      '#9370DB': 'violet',
+      '#FF69B4': 'pink'
+    };
+    return eyeColors[color] || 'brown';
+  };
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+
+    setIsGenerating(true);
+    
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const token = safeLocalStorage.getItem('token');
+      if (!token) throw new Error('Please log in to generate avatars.');
+
+      // Use chat command system instead of direct API call (like ImageCreator)
+      console.log('Base prompt:', prompt);
+      console.log('Settings:', settings);
+      console.log('Customization:', customization);
+
+      // The avatar generation will be handled by the chat controller when we send the /avatar command
+
+      // Create backend chat if needed, then save to server chat
+      let serverChatId = currentChat?.serverId || currentChat?._id;
+      
+      // If no server chat ID exists, create one
+      if (!serverChatId) {
+        try {
+          console.log('Creating new backend chat for avatar generation');
+          
+          const createResponse = await fetch(`${apiBase}/api/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ 
+              title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+              chatType: 'avatar'
+            })
+          });
+
+          if (createResponse.ok) {
+            const chatData = await createResponse.json();
+            serverChatId = chatData.data._id;
+            console.log('Created new backend chat:', serverChatId);
+            
+            // Update the current chat with the server ID
+            if (onChatUpdate) {
+              onChatUpdate({ 
+                id: currentChat?.id || Date.now().toString(),
+                serverId: serverChatId, 
+                title: chatData.data.title || prompt.slice(0, 50) + (prompt.length > 50 ? '...' : '')
+              });
+            }
+          } else {
+            console.error('Failed to create backend chat:', createResponse.status);
+          }
+        } catch (error) {
+          console.error('Error creating backend chat:', error);
+        }
+      }
+      
+      // Save to server chat if we have a server chat ID
+      if (serverChatId) {
+        try {
+          console.log('Saving avatar generation to server chat:', serverChatId);
+          
+          // Send the avatar command to the server chat with character settings
+          const chatPayload = {
+            message: `/avatar ${prompt}`,
+            stream: false,
+            characterSettings: settings,
+            customization: customization
+          };
+          
+          const chatRes = await fetch(`${apiBase}/api/chat/${serverChatId}/message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(chatPayload)
+          });
+          
+          if (chatRes.ok) {
+            const chatData = await chatRes.json();
+            console.log('Chat response received:', chatData);
+            
+            // Check if the response contains avatar data
+            if (chatData.data && chatData.data.avatar) {
+              const avatarUrl = chatData.data.avatar;
+              const imageId = chatData.data.imageId;
+              
+              console.log('🎨 Avatar received from chat response:', avatarUrl);
+              console.log('🖼️ Image ID received from chat response:', imageId);
+              
+              // Set the generated avatar for immediate display
+              setGeneratedAvatar(avatarUrl);
+              
+              // Update chat history with both user and assistant messages
+              if (onChatUpdate) {
+                const trimmed = (prompt || '').trim();
+                const titleBase = trimmed.slice(0, 50);
+                const title = titleBase && trimmed.length > 50 ? `${titleBase}...` : titleBase || (currentChat?.title || 'Avatar Generation');
+                
+                const newMessages = [
+                  ...(currentChat?.messages || []),
+                  { type: 'user', content: prompt, timestamp: Date.now() },
+                  { 
+                    type: 'assistant', 
+                    content: `I've generated an avatar based on your prompt: "${prompt}"`, 
+                    avatar: avatarUrl, 
+                    imageId: imageId,
+                    originalPrompt: prompt,
+                    technicalPrompt: prompt,
+                    timestamp: Date.now() 
+                  }
+                ];
+                
+                console.log('Updating chat history with avatar:', newMessages.map(m => ({
+                  type: m.type,
+                  content: m.content,
+                  hasAvatar: !!m.avatar,
+                  avatarUrl: m.avatar
+                })));
+                
+                onChatUpdate({
+                  messages: newMessages,
+                  ...(title ? { title } : {})
+                });
+              }
+            } else {
+              console.log('No avatar data in chat response, waiting for completion...');
+            }
+          } else {
+            console.error('Failed to save to server chat:', chatRes.status);
+          }
+        } catch (error) {
+          console.error('Error saving to server chat:', error);
+        }
+      }
+
+      console.log('🎨 Avatar generation command sent to chat system');
+
+    } catch (error) {
+      console.error('Error generating avatar:', error);
+      
+      // Better error message handling
+      let errorMessage = 'Unknown error occurred';
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (typeof error === 'object') {
+        try {
+          errorMessage = JSON.stringify(error, null, 2);
+        } catch (e) {
+          errorMessage = String(error);
+        }
+      }
+      
+      alert(`Error generating avatar: ${errorMessage}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (generatedAvatar) {
+      const link = document.createElement('a');
+      link.href = generatedAvatar;
+      link.download = `ai-avatar-${Date.now()}.png`;
+      link.click();
+    }
+  };
+
+  const handleNewChat = () => {
+    setPrompt('');
+    setGeneratedAvatar(null);
+    if (onNewChat) {
+      onNewChat();
+    }
+  };
+
+  const handleCustomizationChange = (key, value) => {
+    setCustomization(prev => ({ ...prev, [key]: value }));
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-800/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500">
+              <User className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">AI Avatar Creator</h1>
+              <p className="text-gray-400">Design unique digital avatars with AI</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+            >
+              <Settings className="w-5 h-5 text-gray-400" />
+            </button>
+            <button
+              onClick={handleNewChat}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 transition-all"
+            >
+              New Chat
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          className="border-b border-gray-800/50 bg-gray-900/30"
+        >
+          <div className="p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Gender</label>
+                <select
+                  value={settings.gender}
+                  onChange={(e) => setSettings(prev => ({ ...prev, gender: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="any">Any</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Age</label>
+                <select
+                  value={settings.age}
+                  onChange={(e) => setSettings(prev => ({ ...prev, age: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="child">Child</option>
+                  <option value="teen">Teen</option>
+                  <option value="adult">Adult</option>
+                  <option value="elderly">Elderly</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Style</label>
+                <select
+                  value={settings.style}
+                  onChange={(e) => setSettings(prev => ({ ...prev, style: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="realistic">Realistic</option>
+                  <option value="cartoon">Cartoon</option>
+                  <option value="anime">Anime</option>
+                  <option value="pixel">Pixel Art</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Expression</label>
+                <select
+                  value={settings.expression}
+                  onChange={(e) => setSettings(prev => ({ ...prev, expression: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="neutral">Neutral</option>
+                  <option value="happy">Happy</option>
+                  <option value="serious">Serious</option>
+                  <option value="confident">Confident</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Clothing</label>
+                <select
+                  value={settings.clothing}
+                  onChange={(e) => setSettings(prev => ({ ...prev, clothing: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="casual">Casual</option>
+                  <option value="formal">Formal</option>
+                  <option value="sporty">Sporty</option>
+                  <option value="creative">Creative</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Background</label>
+                <select
+                  value={settings.background}
+                  onChange={(e) => setSettings(prev => ({ ...prev, background: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="transparent">Transparent</option>
+                  <option value="solid">Solid Color</option>
+                  <option value="gradient">Gradient</option>
+                  <option value="studio">Studio</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Hair Style</label>
+                <select
+                  value={settings.hairStyle}
+                  onChange={(e) => setSettings(prev => ({ ...prev, hairStyle: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="any">Any</option>
+                  <option value="short">Short</option>
+                  <option value="long">Long</option>
+                  <option value="curly">Curly</option>
+                  <option value="straight">Straight</option>
+                  <option value="wavy">Wavy</option>
+                  <option value="bald">Bald</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Build</label>
+                <select
+                  value={settings.build}
+                  onChange={(e) => setSettings(prev => ({ ...prev, build: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="slim">Slim</option>
+                  <option value="athletic">Athletic</option>
+                  <option value="average">Average</option>
+                  <option value="muscular">Muscular</option>
+                  <option value="heavy">Heavy</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Ethnicity</label>
+                <select
+                  value={settings.ethnicity}
+                  onChange={(e) => setSettings(prev => ({ ...prev, ethnicity: e.target.value }))}
+                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                >
+                  <option value="any">Any</option>
+                  <option value="caucasian">Caucasian</option>
+                  <option value="african">African</option>
+                  <option value="asian">Asian</option>
+                  <option value="hispanic">Hispanic</option>
+                  <option value="middle eastern">Middle Eastern</option>
+                  <option value="mixed">Mixed</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Character Presets */}
+            <div className="border-t border-gray-700/50 pt-4 mb-4">
+              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Character Presets
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {characterPresets.map((preset, index) => (
+                  <button
+                    key={index}
+                    onClick={() => applyPreset(preset)}
+                    className="p-2 text-xs bg-gray-800/50 hover:bg-red-600/20 border border-gray-700/50 hover:border-red-600/50 rounded-lg text-gray-300 hover:text-white transition-colors"
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Prompt Preview */}
+            <div className="border-t border-gray-700/50 pt-4 mb-4">
+              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                Generated Prompt Preview
+              </h4>
+              <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+                <p className="text-sm text-gray-300 font-mono break-words">
+                  {prompt ? buildCharacterPrompt(prompt, settings, customization) : 'Enter a prompt to see the generated character prompt...'}
+                </p>
+              </div>
+            </div>
+
+            {/* Customization Colors */}
+            <div className="border-t border-gray-700/50 pt-4">
+              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <Palette className="w-4 h-4" />
+                Customization
+              </h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Hair Color</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={customization.hairColor}
+                      onChange={(e) => handleCustomizationChange('hairColor', e.target.value)}
+                      className="w-8 h-8 rounded border border-gray-600"
+                    />
+                    <span className="text-xs text-gray-400">{customization.hairColor}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Eye Color</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={customization.eyeColor}
+                      onChange={(e) => handleCustomizationChange('eyeColor', e.target.value)}
+                      className="w-8 h-8 rounded border border-gray-600"
+                    />
+                    <span className="text-xs text-gray-400">{customization.eyeColor}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Skin Tone</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={customization.skinTone}
+                      onChange={(e) => handleCustomizationChange('skinTone', e.target.value)}
+                      className="w-8 h-8 rounded border border-gray-600"
+                    />
+                    <span className="text-xs text-gray-400">{customization.skinTone}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Avatar Collection */}
+      {avatarCollection.length > 0 && (
+        <div className="border-b border-gray-800/50 bg-gray-900/30 p-4">
+          <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <User className="w-5 h-5" />
+            Your Avatar Collection ({avatarCollection.length})
+          </h3>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {avatarCollection.map((avatar, index) => (
+              <div key={avatar._id} className="flex-shrink-0 relative group">
+                <img
+                  src={avatar.avatarUrl || `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/avatars/public/${avatar._id}`}
+                  alt={avatar.prompt}
+                  className="w-20 h-20 rounded-lg object-cover border border-gray-700/50 hover:border-purple-500/50 transition-colors"
+                />
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                  <button
+                    onClick={() => setPrompt(avatar.prompt)}
+                    className="p-2 bg-white/20 hover:bg-white/30 rounded-lg text-white transition-colors"
+                    title="Use this prompt"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex">
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Messages */}
+          <div className="flex-1 p-6 overflow-y-auto">
+            {messages?.length > 0 ? (
+              <div className="space-y-4">
+                {messages.map((message, index) => (
+                  <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-2xl p-4 rounded-2xl ${
+                      message.type === 'user' 
+                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' 
+                        : 'bg-gray-800/50 text-gray-200'
+                    }`}>
+                      {message.type === 'user' ? (
+                        <p>{message.content}</p>
+                      ) : (
+                        <FormattedMessage text={message.content} />
+                      )}
+                      {message.avatar && (
+                        <div className="mt-3">
+                          <div className="relative group">
+                          <img 
+                            src={message.avatar} 
+                            alt="Generated Avatar" 
+                            className="rounded-lg max-w-full h-auto"
+                              onLoad={() => console.log('✅ Avatar loaded successfully:', message.avatar)}
+                              onError={(e) => {
+                                console.error('❌ Avatar failed to load:', message.avatar);
+                                
+                                // Ensure we have a full URL
+                                const fullImageUrl = message.avatar.startsWith('http') 
+                                  ? message.avatar 
+                                  : `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}${message.avatar}`;
+                                
+                                console.log('🔧 Constructed full URL:', fullImageUrl);
+                                
+                                // Try to load as blob URL to bypass CORS
+                                fetch(fullImageUrl)
+                                  .then(response => {
+                                    console.log('🔍 Direct fetch test for avatar:', {
+                                      status: response.status,
+                                      statusText: response.statusText,
+                                      url: response.url
+                                    });
+                                    return response.blob();
+                                  })
+                                  .then(blob => {
+                                    console.log('🔍 Avatar blob received:', {
+                                      size: blob.size,
+                                      type: blob.type
+                                    });
+                                    
+                                    // Create object URL and set as src
+                                    const objectUrl = URL.createObjectURL(blob);
+                                    console.log('🔗 Created object URL:', objectUrl);
+                                    e.target.src = objectUrl;
+                                  })
+                                  .catch(fetchError => {
+                                    console.error('🔍 Direct fetch failed:', fetchError);
+                                  });
+                              }}
+                            />
+                            {message.imageId && (
+                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                                      const token = safeLocalStorage.getItem('token');
+                                      
+                                      if (!token) {
+                                        alert('Please log in to save avatars.');
+                                        return;
+                                      }
+
+                                      const response = await fetch(`${apiBase}/api/avatars/save-from-image`, {
+                                        method: 'POST',
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          'Authorization': `Bearer ${token}`
+                                        },
+                                        body: JSON.stringify({
+                                          imageId: message.imageId
+                                        })
+                                      });
+
+                                      const result = await response.json();
+
+                                      if (result.success) {
+                                        // Add to collection logic here
+                                        const imageData = {
+                                          _id: result.data.avatarId,
+                                          avatarUrl: result.data.avatarUrl,
+                                          prompt: result.data.prompt
+                                        };
+                                        if (onAddToCollection) {
+                                          onAddToCollection(imageData, true);
+                                        }
+                                        alert('Avatar saved to your collection!');
+                                      } else {
+                                        alert(result.message || 'Failed to save avatar');
+                                      }
+                                    } catch (error) {
+                                      console.error('Error saving avatar:', error);
+                                      alert('Failed to save avatar. Please try again.');
+                                    }
+                                  }}
+                                  className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-white transition-colors"
+                                  title="Save to My Avatars"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Save to Avatars Button - Prominent button below image */}
+                          {message.imageId && (
+                            <div className="mt-3 flex justify-center">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    console.log('🔍 Saving avatar with imageId:', message.imageId);
+                                    
+                                    const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                                    const token = safeLocalStorage.getItem('token');
+                                    
+                                    if (!token) {
+                                      alert('Please log in to save avatars.');
+                                      return;
+                                    }
+
+                                    const response = await fetch(`${apiBase}/api/avatars/save-from-image`, {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${token}`
+                                      },
+                                      body: JSON.stringify({
+                                        imageId: message.imageId
+                                      })
+                                    });
+
+                                    const result = await response.json();
+
+                                    if (result.success) {
+                                      // Add to collection logic here
+                                      const imageData = {
+                                        _id: result.data.avatarId,
+                                        avatarUrl: result.data.avatarUrl,
+                                        prompt: result.data.prompt
+                                      };
+                                      if (onAddToCollection) {
+                                        onAddToCollection(imageData, true);
+                                      }
+                                      alert('Avatar saved to your collection!');
+                                    } else {
+                                      alert(result.message || 'Failed to save avatar');
+                                    }
+                                  } catch (error) {
+                                    console.error('Error saving avatar:', error);
+                                    alert('Failed to save avatar. Please try again.');
+                                  }
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Save to My Avatars
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="p-4 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                    <Sparkles className="w-10 h-10 text-green-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2">Create Your Avatar</h3>
+                  <p className="text-gray-400 max-w-md">
+                    Describe the avatar you want to create. Include details about appearance, style, and personality.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input Area */}
+          <div className="p-6 border-t border-gray-800/50">
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Describe the avatar you want to create..."
+                  className="w-full p-4 pr-12 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20"
+                  onKeyPress={(e) => e.key === 'Enter' && handleGenerate()}
+                />
+                <button
+                  onClick={handleGenerate}
+                  disabled={!prompt.trim() || isGenerating}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {isGenerating ? (
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Preview Panel */}
+        {generatedAvatar && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 400, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            className="border-l border-gray-800/50 bg-gray-900/30 p-6"
+          >
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-white mb-2">Generated Avatar</h3>
+              <div className="relative">
+                <img 
+                  src={generatedAvatar} 
+                  alt="Generated Avatar" 
+                  className="w-full rounded-lg shadow-lg"
+                  onLoad={() => console.log('✅ Preview avatar loaded successfully:', generatedAvatar)}
+                  onError={(e) => {
+                    console.error('❌ Preview avatar failed to load:', generatedAvatar);
+                    console.error('Error details:', e);
+                  }}
+                />
+                <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center opacity-0 hover:opacity-100">
+                  <button
+                    onClick={handleDownload}
+                    className="p-3 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-all"
+                  >
+                    <Download className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={async () => {
+                  try {
+                    console.log('🔍 Looking for message with avatar:', generatedAvatar);
+                    console.log('🔍 Current chat messages:', currentChat?.messages);
+                    
+                    // Find the current message with the imageId
+                    const currentMessage = currentChat?.messages?.find(msg => msg.avatar === generatedAvatar);
+                    console.log('🔍 Found message:', currentMessage);
+                    console.log('🔍 Message imageId:', currentMessage?.imageId);
+                    
+                    if (!currentMessage?.imageId) {
+                      console.error('❌ No imageId found in message:', currentMessage);
+                      alert('No image ID found. Please generate a new avatar.');
+                      return;
+                    }
+
+                    const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                    const token = safeLocalStorage.getItem('token');
+                    
+                    if (!token) {
+                      alert('Please log in to save avatars.');
+                      return;
+                    }
+
+                    const response = await fetch(`${apiBase}/api/avatars/save-from-image`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({
+                        imageId: currentMessage.imageId
+                      })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                      // Add to collection logic here
+                      const imageData = {
+                        _id: result.data.avatarId,
+                        avatarUrl: result.data.avatarUrl,
+                        prompt: result.data.prompt
+                      };
+                      if (onAddToCollection) {
+                        onAddToCollection(imageData, true);
+                      }
+                      alert('Avatar saved to your collection!');
+                    } else {
+                      alert(result.message || 'Failed to save avatar');
+                    }
+                  } catch (error) {
+                    console.error('Error saving avatar:', error);
+                    alert('Failed to save avatar. Please try again.');
+                  }
+                }}
+                className="w-full p-3 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Save to My Avatars
+              </button>
+              <button
+                onClick={handleDownload}
+                className="w-full p-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transition-all flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Download Avatar
+              </button>
+              <button
+                onClick={() => setGeneratedAvatar(null)}
+                className="w-full p-3 rounded-lg bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 transition-all"
+              >
+                Clear Preview
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AvatarCreator;
