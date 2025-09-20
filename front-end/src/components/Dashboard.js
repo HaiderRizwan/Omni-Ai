@@ -46,6 +46,25 @@ function Dashboard({ user, onLogout }) {
     safeLocalStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
+  // Function to load user's avatars
+  const loadUserAvatars = async () => {
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const token = safeLocalStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`${apiBase}/api/avatars`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.data.avatars)) {
+        setAvatarCollection(json.data.avatars);
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error loading user avatars:', error);
+    }
+  };
+
   // Function to load server chats
   const loadServerChats = async () => {
     try {
@@ -71,6 +90,7 @@ function Dashboard({ user, onLogout }) {
   // Load server chats on mount
   useEffect(() => {
     loadServerChats();
+    loadUserAvatars();
   }, []);
 
   // Reconcile server chats into local cache so sidebar shows them

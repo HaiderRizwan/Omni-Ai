@@ -1,567 +1,325 @@
-const GenerationJob = require('../models/GenerationJob');
-const Character = require('../models/Character');
 const axios = require('axios');
+const Video = require('../models/Video');
+const Avatar = require('../models/Avatar');
+const Render = require('../models/Render');
 
-// Video generation API configurations
-const VIDEO_APIS = {
-  runwayml: {
-    baseUrl: 'https://api.runwayml.com/v1',
-    apiKey: process.env.RUNWAYML_API_KEY,
-    model: 'gen-3-alpha-turbo',
-    maxDuration: 10 // seconds
-  },
-  pika: {
-    baseUrl: 'https://api.pika.art/v1',
-    apiKey: process.env.PIKA_API_KEY,
-    model: 'pika-1.0',
-    maxDuration: 8 // seconds
-  },
-  stability: {
-    baseUrl: 'https://api.stability.ai/v1',
-    apiKey: process.env.STABILITY_API_KEY,
-    model: 'stable-video-diffusion',
-    maxDuration: 4 // seconds
-  }
-};
+const A2E_API_KEY = process.env.A2E_API_KEY;
+const A2E_VIDEO_BASE_URL = process.env.A2E_VIDEO_BASE_URL || 'https://video.a2e.ai/api/v1';
+const A2E_API_BASE_URL = process.env.A2E_API_BASE_URL || 'https://api.a2e.ai/api/v1';
 
-const DEFAULT_PROVIDER = process.env.VIDEO_PROVIDER || 'runwayml';
-
-// @desc    Generate video with main character and audio
-// @route   POST /api/videos/generate
-// @access  Private (Premium)
-const generateVideo = async (req, res) => {
+// Helper function to get available voices
+const getDefaultVoiceId = async () => {
   try {
-    const {
-      prompt,
-      mainCharacterId,
-      duration = 5,
-      style = 'cinematic',
-      aspectRatio = '16:9',
-      provider = DEFAULT_PROVIDER,
-      // Audio parameters
-      includeAudio = true,
-      voiceStyle = 'narrative',
-      backgroundMusic = 'epic',
-      soundEffects = true,
-      dialogue = null // Optional dialogue text for TTS
-    } = req.body;
-
-    // Validate required fields
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Prompt is required'
-      });
-    }
-
-    if (!mainCharacterId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Main character ID is required for video generation'
-      });
-    }
-
-    // Validate duration limits
-    const maxDuration = VIDEO_APIS[provider]?.maxDuration || 10;
-    if (duration > maxDuration) {
-      return res.status(400).json({
-        success: false,
-        message: `Duration cannot exceed ${maxDuration} seconds for ${provider}`
-      });
-    }
-
-    // Get main character
-    const mainCharacter = await Character.findOne({
-      _id: mainCharacterId,
-      user: req.user._id
+    const response = await axios.get(`${A2E_VIDEO_BASE_URL}/anchor/voice_list?country=en&region=US&voice_map_type=en-US`, {
+      headers: { 'Authorization': `Bearer ${A2E_API_KEY}` }
     });
-
-    if (!mainCharacter) {
-      return res.status(404).json({
-        success: false,
-        message: 'Main character not found'
-      });
+    
+    if (response.data.code === 0 && response.data.data && response.data.data.length > 0) {
+      // Return the first available voice ID
+      return response.data.data[0].voice_id || response.data.data[0].id;
     }
-
-    // Enhance prompt with main character details
-    const enhancedPrompt = `${mainCharacter.imageGenPrompt}, ${prompt}`;
-
-    // Create generation job
-    const job = await GenerationJob.create({
-      user: req.user._id,
-      type: 'video',
-      status: 'queued',
-      parameters: {
-        prompt: enhancedPrompt,
-        duration,
-        style,
-        aspectRatio,
-        model: VIDEO_APIS[provider].model,
-        // Audio parameters
-        includeAudio,
-        voiceStyle,
-        backgroundMusic,
-        soundEffects,
-        dialogue
-      },
-      characters: [{
-        characterId: mainCharacterId,
-        role: 'main'
-      }],
-      provider
-    });
-
-    // Start video generation
-    processVideoGeneration(job._id, {
-      prompt: enhancedPrompt,
-      mainCharacter,
-      duration,
-      style,
-      aspectRatio,
-      provider
-    });
-
-    // Increment character usage
-    await mainCharacter.incrementUsage();
-
-    res.status(202).json({
-      success: true,
-      data: {
-        jobId: job._id,
-        status: job.status,
-        message: includeAudio
-          ? 'Video generation with audio started'
-          : 'Video generation started',
-        estimatedTime: `${Math.ceil(duration * 2)}-60 seconds`,
-        mainCharacter: {
-          id: mainCharacter._id,
-          name: mainCharacter.name
-        },
-        audio: includeAudio ? {
-          voiceStyle,
-          backgroundMusic,
-          soundEffects,
-          dialogue: dialogue ? 'Included' : null
-        } : null
-      }
-    });
-
   } catch (error) {
-    console.error('Generate video error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate video',
-      error: error.message
-    });
+    console.warn('Could not fetch voice list:', error.message);
   }
+  
+  // Fallback to a common voice ID format
+  return 'en-US-AriaNeural';
 };
 
-// @desc    Get video generation job status
-// @route   GET /api/videos/job/:id
-// @access  Private
-const getVideoJob = async (req, res) => {
-  try {
-    const job = await GenerationJob.findOne({
-      _id: req.params.id,
-      user: req.user._id,
-      type: 'video'
-    }).populate('characters.characterId', 'name imageUrl');
+const generateTtsAudio = async (script, voiceId = null) => {
+  // Use the documented video TTS endpoint
+  const ttsPayload = {
+    msg: script,
+    country: 'en',
+    region: 'US',
+    speechRate: 1.0
+  };
+  
+  // Add voice ID if provided (for custom voice clones), otherwise get default TTS
+  if (voiceId) {
+    ttsPayload.user_voice_id = voiceId;
+  } else {
+    // Get a default TTS voice ID
+    const defaultVoiceId = await getDefaultVoiceId();
+    ttsPayload.tts_id = defaultVoiceId;
+  }
+  
+  const ttsResponse = await axios.post(`${A2E_VIDEO_BASE_URL}/video/send_tts`, ttsPayload, { 
+    headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' } 
+  });
 
-    if (!job) {
-      return res.status(404).json({
-        success: false,
-        message: 'Video generation job not found'
-      });
+  if (ttsResponse.data.code !== 0) {
+    console.error('A2E TTS API Error:', ttsResponse.data);
+    throw new Error(`A2E TTS Error: ${ttsResponse.data.message || JSON.stringify(ttsResponse.data)}`);
+  }
+  return ttsResponse.data.data.audioSrc || ttsResponse.data.data.audio_src;
+};
+
+const processRenderJob = async (renderId) => {
+  const render = await Render.findById(renderId).populate('avatar');
+  try {
+    if (!render) throw new Error('Render job not found');
+    
+    console.log('Processing render job:', renderId);
+    console.log('Avatar metadata:', render.avatar.metadata);
+
+    // Validate avatar has required A2E metadata
+    if (!render.avatar.metadata || !render.avatar.metadata.a2eAnchorId) {
+      throw new Error('Avatar is not A2E-compatible (missing a2eAnchorId)');
     }
 
-    res.status(200).json({
-      success: true,
-      data: job
-    });
-  } catch (error) {
-    console.error('Get video job error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get video job',
-      error: error.message
-    });
-  }
-};
+    // Step 1: Generate TTS audio
+    await render.updateOne({ status: 'tts_done' });
+    const audioSrc = await generateTtsAudio(render.script, render.voiceId);
+    await render.updateOne({ tts_url: audioSrc });
+    console.log('TTS generated:', audioSrc);
 
-// @desc    Get user's video generation history
-// @route   GET /api/videos/history
-// @access  Private
-const getVideoHistory = async (req, res) => {
-  try {
-    const { limit = 20, status } = req.query;
-
-    const query = {
-      user: req.user._id,
-      type: 'video'
+    // Step 2: Generate video with A2E
+    await render.updateOne({ status: 'a2e_started' });
+    
+    const videoPayload = {
+      title: render.title || `Video ${Date.now()}`,
+      anchor_id: render.avatar.metadata.a2eAnchorId,
+      anchor_type: 1, // Custom avatar
+      audioSrc: audioSrc,
+      resolution: 1080,
+      isSkipRs: true,
+      isCaptionEnabled: false
     };
+    
+    console.log('Video generation payload:', videoPayload);
+    
+    const videoResponse = await axios.post(`${A2E_VIDEO_BASE_URL}/video/generate`, videoPayload, { 
+      headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' } 
+    });
 
-    if (status) {
-      query.status = status;
+    if (videoResponse.data.code !== 0) {
+      console.error('A2E video generation error:', videoResponse.data);
+      throw new Error(`A2E video gen error: ${videoResponse.data.message || JSON.stringify(videoResponse.data)}`);
     }
+    
+    const a2eTaskId = videoResponse.data.data._id || videoResponse.data.data.task_id;
+    console.log('A2E video task started:', a2eTaskId);
+    
+    await render.updateOne({ provider_job_id: a2eTaskId, status: 'rendering' });
 
-    const jobs = await GenerationJob.find(query)
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .populate('characters.characterId', 'name imageUrl');
+    // Start polling for results
+    pollForVideoResult(renderId, a2eTaskId);
 
-    res.status(200).json({
-      success: true,
-      data: jobs,
-      count: jobs.length
-    });
   } catch (error) {
-    console.error('Get video history error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get video history',
-      error: error.message
+    console.error(`Error processing render ${renderId}:`, { 
+      status: error.response?.status, 
+      data: error.response?.data, 
+      message: error.message 
     });
+    if(render) await render.updateOne({ status: 'failed', error: { message: error.message } });
   }
 };
 
-// @desc    Cancel video generation job
-// @route   POST /api/videos/job/:id/cancel
-// @access  Private
-const cancelVideoJob = async (req, res) => {
+const pollForVideoResult = async (renderId, a2eTaskId) => {
+  const render = await Render.findById(renderId);
   try {
-    const job = await GenerationJob.findOne({
-      _id: req.params.id,
-      user: req.user._id,
-      type: 'video'
-    });
-
-    if (!job) {
-      return res.status(404).json({
-        success: false,
-        message: 'Video generation job not found'
-      });
-    }
-
-    if (job.status === 'completed' || job.status === 'failed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Job is already completed or failed'
-      });
-    }
-
-    await job.cancel();
-
-    res.status(200).json({
-      success: true,
-      message: 'Video generation job cancelled',
-      data: job
-    });
-  } catch (error) {
-    console.error('Cancel video job error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to cancel video job',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Get supported video providers and options
-// @route   GET /api/videos/supported
-// @access  Private
-const getSupportedVideoOptions = async (req, res) => {
-  try {
-    const providers = Object.keys(VIDEO_APIS).map(provider => ({
-      name: provider,
-      maxDuration: VIDEO_APIS[provider].maxDuration,
-      supportedFormats: ['mp4'],
-      supportedRatios: ['16:9', '9:16', '1:1'],
-      audioSupport: true
-    }));
-
-    res.status(200).json({
-      success: true,
-      data: {
-        providers,
-        defaultProvider: DEFAULT_PROVIDER,
-        features: {
-          mainCharacterRequired: true,
-          maxDuration: 10,
-          supportedStyles: ['cinematic', 'realistic', 'animated', 'documentary'],
-          audioFeatures: {
-            ttsVoices: ['narrative', 'dramatic', 'calm', 'inspirational'],
-            musicStyles: ['epic', 'ambient', 'uplifting', 'dramatic', 'peaceful'],
-            soundEffects: true,
-            mixingCapabilities: true
-          }
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Get supported video options error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get supported video options',
-      error: error.message
-    });
-  }
-};
-
-// Helper function to process video generation
-const processVideoGeneration = async (jobId, params) => {
-  try {
-    const job = await GenerationJob.findById(jobId);
-    if (!job) return;
-
-    await job.start();
-    await job.updateProgress(10, 'Initializing video generation');
-
-    let videoUrl = '';
-    let audioUrl = '';
-    const provider = params.provider || DEFAULT_PROVIDER;
-
-    // Generate video based on provider
-    switch (provider) {
-      case 'runwayml':
-        videoUrl = await generateWithRunwayML(params);
-        break;
-      case 'pika':
-        videoUrl = await generateWithPika(params);
-        break;
-      case 'stability':
-        videoUrl = await generateWithStabilityVideo(params);
-        break;
-      default:
-        throw new Error(`Unsupported provider: ${provider}`);
-    }
-
-    await job.updateProgress(60, 'Video generation complete, processing audio');
-
-    // Generate audio if requested
-    if (params.includeAudio) {
+    console.log(`Starting to poll for video result. Render: ${renderId}, Task: ${a2eTaskId}`);
+    
+    for (let i = 0; i < 120; i++) { // Poll for up to 20 minutes
+      await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds between polls
+      
+      let taskData;
       try {
-        if (params.dialogue) {
-          // Generate TTS for dialogue
-          audioUrl = await generateTTS(params.dialogue, params.voiceStyle);
-          await job.updateProgress(80, 'TTS generated, adding background music');
+        // Try the awsResult endpoint first (more reliable)
+        const response = await axios.post(`${A2E_VIDEO_BASE_URL}/video/awsResult`, 
+          { _id: a2eTaskId }, 
+          { headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' } }
+        );
+        taskData = response.data.data;
+        console.log(`Poll ${i + 1}: Task status:`, taskData.status || taskData.current_status);
+      } catch (e) {
+        console.warn(`Poll ${i + 1}: Error checking status:`, e.message);
+        // Try alternative endpoint if awsResult fails
+        try {
+          const fallback = await axios.get(`${A2E_VIDEO_BASE_URL}/video/task_info?task_id=${a2eTaskId}`, { 
+            headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+          });
+          taskData = fallback.data.data;
+        } catch (e2) {
+          console.warn(`Poll ${i + 1}: Both endpoints failed:`, e2.message);
+          continue; // Skip this poll iteration
         }
-
-        // Generate background music and sound effects
-        const musicUrl = await generateBackgroundMusic(params.backgroundMusic, params.duration);
-
-        // Mix audio tracks (this would be done by the video provider or a separate service)
-        const finalAudioUrl = await mixAudioTracks(audioUrl, musicUrl, params.soundEffects);
-
-        await job.updateProgress(90, 'Audio mixing complete');
-      } catch (audioError) {
-        console.error('Audio generation failed:', audioError);
-        // Continue without audio rather than failing the entire job
-        await job.updateProgress(75, 'Audio generation failed, proceeding without audio');
       }
-    }
 
-    // Complete job with result
-    const results = [{
-      url: videoUrl,
-      filename: `generated-video-${Date.now()}.mp4`,
-      format: 'mp4',
-      size: 10240000, // Estimated size
-      metadata: {
-        duration: params.duration,
-        prompt: params.prompt,
-        provider,
-        style: params.style,
-        aspectRatio: params.aspectRatio,
-        mainCharacter: params.mainCharacter.name,
-        hasAudio: !!audioUrl,
-        audioTracks: audioUrl ? {
-          voice: params.voiceStyle,
-          backgroundMusic: params.backgroundMusic,
-          soundEffects: params.soundEffects
-        } : null
-      }
-    }];
-
-    // Add audio file if generated
-    if (audioUrl) {
-      results.push({
-        url: audioUrl,
-        filename: `generated-audio-${Date.now()}.mp3`,
-        format: 'mp3',
-        size: 2048000, // Estimated size
-        metadata: {
-          type: 'audio',
-          duration: params.duration,
-          voiceStyle: params.voiceStyle
+      const status = taskData.status || taskData.current_status;
+      
+      if (status === 'completed') {
+        console.log('Video generation completed!');
+        await render.updateOne({ status: 'compositing' });
+        
+        const resultUrl = taskData.result || taskData.url || taskData.video_url || taskData.videoUrl;
+        if (!resultUrl) {
+          throw new Error('Video completed but no result URL found');
         }
-      });
+        
+        console.log('Video result URL:', resultUrl);
+        const video = await Video.create({ 
+          user: render.user, 
+          render: render._id, 
+          url_master: resultUrl, 
+          provider: 'a2e',
+          metadata: {
+            a2eTaskId: a2eTaskId,
+            generatedAt: new Date()
+          }
+        });
+        
+        await render.updateOne({ status: 'succeeded', video_url_master: video.url_master });
+        console.log(`Video generation completed for render ${renderId}`);
+        return;
+        
+      } else if (status === 'failed') {
+        const errorMsg = taskData.error || taskData.failed_message || taskData.message || 'unknown error';
+        console.error('A2E task failed:', errorMsg);
+        throw new Error(`A2E task failed: ${errorMsg}`);
+        
+      } else if (status === 'processing' || status === 'queued' || status === 'initialized') {
+        // Still processing, continue polling
+        continue;
+      } else {
+        console.log(`Unknown status: ${status}, continuing to poll...`);
+      }
     }
-
-    await job.complete(results);
-
+    
+    throw new Error('Video generation timed out after 20 minutes.');
+    
   } catch (error) {
-    console.error('Video generation process error:', error);
-    const job = await GenerationJob.findById(jobId);
-    if (job) {
-      await job.fail(error.message);
-    }
+    console.error(`Error polling for render ${renderId}:`, { 
+      status: error.response?.status, 
+      data: error.response?.data, 
+      message: error.message 
+    });
+    await render.updateOne({ status: 'failed', error: { message: error.message } });
   }
-};
-
-// RunwayML integration
-const generateWithRunwayML = async (params) => {
-  const config = VIDEO_APIS.runwayml;
-
-  try {
-    const response = await axios.post(
-      `${config.baseUrl}/image_to_video`,
-      {
-        model: config.model,
-        prompt_image: params.mainCharacter.imageUrl || generateCharacterImage(params.mainCharacter),
-        prompt_text: params.prompt,
-        duration: params.duration,
-        ratio: params.aspectRatio.replace(':', '_')
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 120000 // 2 minutes timeout
-      }
-    );
-
-    // RunwayML returns a job ID, we'd need to poll for completion
-    // For now, return a placeholder
-    return `https://runwayml.com/jobs/${response.data.id}`;
-
-  } catch (error) {
-    console.error('RunwayML API error:', error.response?.data);
-    throw new Error('Failed to generate video with RunwayML');
-  }
-};
-
-// Pika Labs integration
-const generateWithPika = async (params) => {
-  const config = VIDEO_APIS.pika;
-
-  try {
-    const response = await axios.post(
-      `${config.baseUrl}/videos/generate`,
-      {
-        prompt: params.prompt,
-        model: config.model,
-        duration: params.duration,
-        aspect_ratio: params.aspectRatio.replace(':', '_')
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 120000
-      }
-    );
-
-    return response.data.video_url || `https://pika.art/videos/${response.data.id}`;
-
-  } catch (error) {
-    console.error('Pika API error:', error.response?.data);
-    throw new Error('Failed to generate video with Pika');
-  }
-};
-
-// Stability AI Video integration
-const generateWithStabilityVideo = async (params) => {
-  const config = VIDEO_APIS.stability;
-
-  try {
-    const response = await axios.post(
-      `${config.baseUrl}/generation/${config.model}/text-to-video`,
-      {
-        seed: Math.floor(Math.random() * 1000000),
-        cfg_scale: 2.5,
-        motion_bucket_id: 127
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 120000
-      }
-    );
-
-    return response.data.video;
-
-  } catch (error) {
-    console.error('Stability Video API error:', error.response?.data);
-    throw new Error('Failed to generate video with Stability AI');
-  }
-};
-
-// Helper function to generate TTS (Text-to-Speech)
-const generateTTS = async (text, voiceStyle = 'narrative') => {
-  try {
-    // This would integrate with TTS services like:
-    // - ElevenLabs
-    // - OpenAI TTS
-    // - Google Cloud TTS
-    // - Azure Speech Services
-
-    // For now, return a placeholder URL
-    console.log(`Generating TTS for text: "${text.substring(0, 50)}..." with style: ${voiceStyle}`);
-    return `https://storage.example.com/tts/${Date.now()}.mp3`;
-  } catch (error) {
-    console.error('TTS generation error:', error);
-    throw new Error('Failed to generate text-to-speech audio');
-  }
-};
-
-// Helper function to generate background music
-const generateBackgroundMusic = async (musicStyle = 'epic', duration = 5) => {
-  try {
-    // This would integrate with music generation services like:
-    // - AIVA
-    // - OpenAI MusicGen
-    // - Suno AI
-    // - Udio
-
-    console.log(`Generating ${musicStyle} background music for ${duration} seconds`);
-    return `https://storage.example.com/music/${musicStyle}_${Date.now()}.mp3`;
-  } catch (error) {
-    console.error('Background music generation error:', error);
-    throw new Error('Failed to generate background music');
-  }
-};
-
-// Helper function to mix audio tracks
-const mixAudioTracks = async (voiceUrl, musicUrl, includeSoundEffects = true) => {
-  try {
-    // This would use audio processing services like:
-    // - FFmpeg (server-side)
-    // - Audio APIs (Cloudinary, etc.)
-    // - Specialized audio mixing services
-
-    console.log('Mixing audio tracks with voice, music, and sound effects');
-    return `https://storage.example.com/mixed/${Date.now()}.mp3`;
-  } catch (error) {
-    console.error('Audio mixing error:', error);
-    throw new Error('Failed to mix audio tracks');
-  }
-};
-
-// Helper function to generate character image if not available
-const generateCharacterImage = (character) => {
-  // This would call the image generation API
-  // For now, return a placeholder
-  return `data:image/png;base64,${Buffer.from('placeholder').toString('base64')}`;
 };
 
 module.exports = {
-  generateVideo,
-  getVideoJob,
-  getVideoHistory,
-  cancelVideoJob,
-  getSupportedVideoOptions
+  processRenderJob,
+  // Create a video generation job starting from a user's avatar (A2E-compatible)
+  // POST /api/videos/generate
+  generateVideoFromAvatar: async (req, res) => {
+    try {
+      console.log('=== VIDEO GENERATION REQUEST ===');
+      console.log('Request body:', req.body);
+      
+      if (!A2E_API_KEY) {
+        return res.status(500).json({ success: false, message: 'A2E_API_KEY not configured on server' });
+      }
+
+      const { prompt, mainCharacterId, duration, title, voiceId } = req.body || {};
+
+      if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+        return res.status(400).json({ success: false, message: 'Prompt (script) is required' });
+      }
+
+      if (!mainCharacterId) {
+        return res.status(400).json({ success: false, message: 'mainCharacterId (avatar id) is required' });
+      }
+
+      const avatar = await Avatar.findOne({ _id: mainCharacterId, user: req.user._id });
+      if (!avatar) {
+        return res.status(404).json({ success: false, message: 'Avatar not found for this user' });
+      }
+
+      console.log('Avatar found:', {
+        id: avatar._id,
+        metadata: avatar.metadata
+      });
+
+      if (!avatar.metadata || !avatar.metadata.a2eAnchorId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Selected avatar is not A2E-compatible (missing a2eAnchorId). Please create a new avatar or migrate existing ones.' 
+        });
+      }
+
+      // Create a render record that drives the background pipeline
+      const render = await Render.create({
+        user: req.user._id,
+        avatar: avatar._id,
+        script: prompt,
+        title: title || `Video ${Date.now()}`,
+        voiceId: voiceId || null,
+        status: 'queued',
+        metadata: {
+          duration: Math.min(Math.max(parseInt(duration || 30, 10), 5), 300), // 5 sec to 5 min
+          createdAt: new Date()
+        }
+      });
+
+      console.log('Render job created:', render._id);
+
+      // Fire-and-forget background processing
+      setImmediate(() => processRenderJob(render._id));
+
+      return res.status(202).json({
+        success: true,
+        message: 'Avatar video generation started',
+        data: { 
+          jobId: String(render._id), 
+          estimatedSeconds: Math.min(Math.max(parseInt(duration || 30, 10), 30), 180),
+          avatarId: mainCharacterId,
+          script: prompt
+        }
+      });
+    } catch (error) {
+      console.error('Error creating avatar video job:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to create avatar video job',
+        error: error.message 
+      });
+    }
+  },
+
+  // Get job status compatible with AvatarVideoCreator polling
+  // GET /api/videos/job/:jobId
+  getVideoJob: async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const render = await Render.findOne({ _id: jobId, user: req.user._id });
+      if (!render) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      if (render.status === 'succeeded') {
+        return res.json({
+          success: true,
+          data: {
+            id: String(render._id),
+            status: 'completed',
+            results: [{ url: render.video_url_master }]
+          }
+        });
+      }
+
+      if (render.status === 'failed') {
+        return res.json({
+          success: true,
+          data: {
+            id: String(render._id),
+            status: 'failed',
+            error: render.error || { message: 'Render failed' }
+          }
+        });
+      }
+
+      // Any other state is still processing
+      return res.json({
+        success: true,
+        data: {
+          id: String(render._id),
+          status: 'processing'
+        }
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: 'Failed to fetch job status' });
+    }
+  }
 };

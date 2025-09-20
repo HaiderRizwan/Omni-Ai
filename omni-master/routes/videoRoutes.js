@@ -1,25 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const {
-  generateVideo,
-  getVideoJob,
-  getVideoHistory,
-  cancelVideoJob,
-  getSupportedVideoOptions
+  generateVideoFromAvatar,
+  getVideoJob
 } = require('../controllers/videoController');
-
-// Import middleware
 const { protect } = require('../middleware/auth');
 const { requirePremium } = require('../middleware/subscription');
 
-// All video routes require authentication
-router.use(protect);
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Video generation routes (premium feature)
-router.post('/generate', requirePremium, generateVideo);
-router.get('/job/:id', getVideoJob);
-router.get('/history', getVideoHistory);
-router.post('/job/:id/cancel', cancelVideoJob);
-router.get('/supported', getSupportedVideoOptions);
+router.post('/generate', protect, requirePremium, generateVideoFromAvatar);
+
+router.get('/job/:jobId', protect, getVideoJob);
 
 module.exports = router;

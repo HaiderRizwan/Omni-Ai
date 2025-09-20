@@ -9,13 +9,12 @@ const protect = async (req, res, next) => {
 
     // Check for token in headers
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      console.log('[Auth] Authorization header present');
       token = req.headers.authorization.split(' ')[1];
     }
 
     // Check for token in cookies (if using cookies)
     if (!token && req.cookies && req.cookies.token) {
-      console.log('[Auth] Token found in cookies');
+      // token in cookies
       token = req.cookies.token;
     }
 
@@ -30,13 +29,11 @@ const protect = async (req, res, next) => {
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-      console.log('[Auth] Token verified for user:', decoded.userId);
 
       // Get user from token
       const user = await User.findById(decoded.userId);
 
       if (!user) {
-        console.warn('[Auth] No user found for token userId:', decoded.userId);
         return res.status(401).json({
           success: false,
           message: 'No user found with this token'
@@ -45,7 +42,6 @@ const protect = async (req, res, next) => {
 
       // Check if user is active
       if (!user.isActive) {
-        console.warn('[Auth] User is deactivated:', decoded.userId);
         return res.status(401).json({
           success: false,
           message: 'User account is deactivated'
@@ -57,7 +53,7 @@ const protect = async (req, res, next) => {
       // Validate subscription status and continue chain inside that middleware
       return validateSubscriptionStatus(req, res, next);
     } catch (error) {
-      console.warn('[Auth] Token verification failed');
+      // token verification failed
       return res.status(401).json({
         success: false,
         message: 'Not authorized to access this route'

@@ -11,7 +11,9 @@ const {
   getPublicImage,
   getUserImages,
   deleteImage,
-  getAllImages
+  getAllImages,
+  a2eImageToVideo,
+  a2eImageEdit
 } = require('../controllers/imageController');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
@@ -43,6 +45,10 @@ router.post('/job/:id/cancel', cancelImageJob);
 // Hugging Face endpoints
 router.post('/hf/text-to-image', requirePremium, hfTextToImage);
 router.post('/hf/controlnet', requirePremium, upload.single('controlImage'), hfControlNet);
+
+// A2E endpoints
+router.post('/a2e/image-to-video', requirePremium, upload.single('image'), a2eImageToVideo);
+router.post('/a2e/edit', requirePremium, upload.single('image'), a2eImageEdit);
 
 // Image storage endpoints
 router.get('/', getAllImages);

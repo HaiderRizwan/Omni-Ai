@@ -2,36 +2,22 @@ const GenerationJob = require('../models/GenerationJob');
 const Character = require('../models/Character');
 const Image = require('../models/Image');
 const axios = require('axios');
+const { saveBufferToUploads } = require('../utils/localUploader');
 const { HfInference } = require('@huggingface/inference');
 
 // Image generation API configurations
 const IMAGE_APIS = {
-  openrouter: {
-    baseUrl: 'https://openrouter.ai/api/v1',
-    apiKey: process.env.OPENROUTER_API_KEY,
-    model: 'dall-e-3'
+  a2eTextToImage: {
+    baseUrl: 'https://video.a2e.ai/api/v1',
+    apiKey: process.env.A2E_API_KEY
   },
-  openai: {
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: process.env.OPENAI_API_KEY,
-    model: 'dall-e-3',
-    maxSize: '1792x1024'
-  },
-  stability: {
-    baseUrl: 'https://api.stability.ai/v1',
-    apiKey: process.env.STABILITY_API_KEY,
-    model: 'stable-diffusion-xl-1024-v1-0',
-    maxSize: '1024x1024'
-  },
-  replicate: {
-    baseUrl: 'https://api.replicate.com/v1',
-    apiKey: process.env.REPLICATE_API_KEY,
-    model: 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
-    maxSize: '1024x1024'
+  a2eImageToVideo: {
+    baseUrl: 'https://api.a2e.ai/api/v1',
+    apiKey: process.env.A2E_API_KEY
   }
 };
 
-const DEFAULT_PROVIDER = process.env.IMAGE_PROVIDER || (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'openai');
+const DEFAULT_PROVIDER = 'a2e';
 
 // @desc    Generate image
 // @route   POST /api/images/generate
@@ -62,6 +48,7 @@ const generateImage = async (req, res) => {
 
     // Check available API keys
     console.log('=== API KEY CHECK ===');
+    console.log('A2E_API_KEY exists:', !!process.env.A2E_API_KEY);
     console.log('OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY);
     console.log('HF_TOKEN exists:', !!process.env.HF_TOKEN);
     console.log('OPENROUTER_API_KEY exists:', !!process.env.OPENROUTER_API_KEY);
@@ -69,26 +56,11 @@ const generateImage = async (req, res) => {
     console.log('REPLICATE_API_KEY exists:', !!process.env.REPLICATE_API_KEY);
     console.log('========================');
 
-    // Determine the best available provider
-    let provider;
-    if (process.env.OPENAI_API_KEY) {
-      provider = 'openai';
-    } else if (process.env.HF_TOKEN) {
-      provider = 'huggingface';
-    } else if (process.env.OPENROUTER_API_KEY) {
-      provider = 'openrouter';
-    } else if (process.env.STABILITY_API_KEY) {
-      provider = 'stability';
-    } else if (process.env.REPLICATE_API_KEY) {
-      provider = 'replicate';
-    } else {
-      console.error('No API keys found!');
-      return res.status(400).json({
-        success: false,
-        message: 'No image generation API keys configured. Please set OPENAI_API_KEY, HF_TOKEN, or another image API key.',
-        availableProviders: ['openai', 'huggingface', 'openrouter', 'stability', 'replicate']
-      });
+    // Only a2e provider
+    if (!process.env.A2E_API_KEY) {
+      return res.status(400).json({ success: false, message: 'A2E_API_KEY is required' });
     }
+    const provider = 'a2e';
 
     console.log('Selected provider:', provider);
 
@@ -296,25 +268,9 @@ const processImageGeneration = async (jobId, params) => {
 
     // Generate image based on provider
     switch (provider) {
-      case 'openrouter':
-        console.log('Using OpenRouter (fallback)');
-        imageUrl = await generateWithOpenRouter(params);
-        break;
-      case 'openai':
-        console.log('Using OpenAI DALL-E');
-        imageUrl = await generateWithOpenAI(params);
-        break;
-      case 'huggingface':
-        console.log('Using Hugging Face');
-        imageUrl = await generateWithHuggingFace(params);
-        break;
-      case 'stability':
-        console.log('Using Stability AI');
-        imageUrl = await generateWithStability(params);
-        break;
-      case 'replicate':
-        console.log('Using Replicate');
-        imageUrl = await generateWithReplicate(params);
+      case 'a2e':
+        console.log('Using A2E Text-to-Image');
+        imageUrl = await generateWithA2ETextToImage(params);
         break;
       default:
         throw new Error(`Unsupported provider: ${provider}`);
@@ -424,7 +380,8 @@ const processImageGeneration = async (jobId, params) => {
     console.error('Error details:', {
       message: error.message,
       stack: error.stack,
-      provider: params.provider || DEFAULT_PROVIDER
+      provider: params.provider || DEFAULT_PROVIDER,
+      a2e: error.response?.data || null
     });
     
     const job = await GenerationJob.findById(jobId);
@@ -434,155 +391,241 @@ const processImageGeneration = async (jobId, params) => {
   }
 };
 
-// OpenRouter integration - fallback to OpenAI DALL-E
-const generateWithOpenRouter = async (params) => {
-  // OpenRouter doesn't directly support DALL-E, so we'll use OpenAI directly
-  // if OPENAI_API_KEY is available, otherwise fall back to Hugging Face
-  if (process.env.OPENAI_API_KEY) {
-    return await generateWithOpenAI(params);
-  } else if (process.env.HF_TOKEN) {
-    return await generateWithHuggingFace(params);
-  } else {
-    throw new Error('No image generation API available. Please set OPENAI_API_KEY or HF_TOKEN');
-  }
+// Remove non-A2E providers for simplicity
+
+// Helper function to pick alternate base URL
+const pickAltImageBase = (current) => {
+  if (current.includes('video.a2e.ai')) return 'https://video.a2e.com.cn/api/v1';
+  return 'https://video.a2e.ai/api/v1';
 };
 
-// OpenAI DALL-E integration
-const generateWithOpenAI = async (params) => {
-  const config = IMAGE_APIS.openai;
-
-  const response = await axios.post(
-    `${config.baseUrl}/images/generations`,
-    {
-      model: config.model,
-      prompt: params.prompt,
-      size: getOpenAISize(params.aspectRatio),
-      quality: 'standard',
-      n: 1
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 60000
+// Helper function with retry logic for DNS issues
+const withImageRetries = async (fn, { attempts = 3, delayMs = 1500 } = {}) => {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try { 
+      return await fn(); 
+    } catch (err) {
+      lastErr = err;
+      const msg = (err && err.message) || '';
+      // Retry DNS/network errors
+      if (/EAI_AGAIN|ENOTFOUND|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|getaddrinfo/i.test(msg)) {
+        console.log(`🔄 DNS/Network error, retrying ${i + 1}/${attempts}: ${msg}`);
+        await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+        continue;
+      }
+      break;
     }
-  );
-
-  return response.data.data[0].url;
+  }
+  throw lastErr;
 };
 
-// Hugging Face integration
-const generateWithHuggingFace = async (params) => {
-  console.log('=== HUGGING FACE IMAGE GENERATION ===');
-  console.log('HF_TOKEN exists:', !!process.env.HF_TOKEN);
-  console.log('HF_TOKEN length:', process.env.HF_TOKEN?.length || 0);
-  console.log('Parameters:', params);
+// A2E Text-to-Image integration using Nano Banana with fallback
+const generateWithA2ETextToImage = async (params) => {
+  console.log('🎨 === A2E TEXT-TO-IMAGE START ===');
+  console.log('📝 Prompt:', params.prompt);
   
-  const hfToken = process.env.HF_TOKEN;
-  if (!hfToken) {
-    throw new Error('HF_TOKEN is not set in environment variables');
-  }
-
+  let config = IMAGE_APIS.a2eTextToImage;
+  console.log('🔗 Primary base URL:', config.baseUrl);
+  
+  let response;
+  
   try {
-    const hf = new HfInference(hfToken);
-    console.log('Hugging Face client initialized');
-
-    // Generate image using Hugging Face
-    console.log('Starting image generation with model: stabilityai/stable-diffusion-xl-base-1.0');
-    const blob = await hf.textToImage({
-      model: 'stabilityai/stable-diffusion-xl-base-1.0',
-      inputs: params.prompt,
-      parameters: {
-        negative_prompt: params.negativePrompt || '',
-        width: 1024,
-        height: 1024,
-        num_inference_steps: 30,
-        guidance_scale: 7.5,
-        ...(params.seed !== undefined ? { seed: params.seed } : {})
+    // Try primary endpoint with retries
+    console.log('📡 Attempting primary endpoint...');
+    response = await withImageRetries(() => axios.post(
+      `${config.baseUrl}/userNanoBanana/start`,
+      {
+        name: "Omni-AI Generated Image",
+        prompt: params.prompt
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 120000
       }
-    });
-
-    console.log('Image generation completed, blob size:', blob.size);
-    console.log('Blob type:', blob.type);
-
-    // Convert blob to base64
-    const arrayBuffer = await blob.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
-    const dataUrl = `data:image/png;base64,${base64}`;
+    ));
+    console.log('✅ Primary endpoint successful');
+  } catch (primaryError) {
+    console.log('⚠️ Primary endpoint failed:', primaryError.message);
     
-    console.log('Base64 conversion completed, data URL length:', dataUrl.length);
-    return dataUrl;
-  } catch (error) {
-    console.error('Hugging Face generation error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      name: error.name,
-      status: error.status,
-      statusText: error.statusText
-    });
-    throw new Error(`Hugging Face generation failed: ${error.message}`);
+    // Try alternate base URL
+    const altBaseUrl = pickAltImageBase(config.baseUrl);
+    console.log('🔄 Trying alternate base URL:', altBaseUrl);
+    
+    try {
+      response = await withImageRetries(() => axios.post(
+        `${altBaseUrl}/userNanoBanana/start`,
+        {
+          name: "Omni-AI Generated Image",
+          prompt: params.prompt
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 120000
+        }
+      ));
+      
+      // Update config to use working base URL
+      config = { ...config, baseUrl: altBaseUrl };
+      console.log('✅ Alternate endpoint successful');
+    } catch (altError) {
+      console.log('❌ Both endpoints failed');
+      console.log('Primary error:', primaryError.message);
+      console.log('Alternate error:', altError.message);
+      throw new Error(`A2E API endpoints unreachable. Primary: ${primaryError.message}, Alternate: ${altError.message}`);
+    }
   }
+
+  console.log('📨 Response code:', response.data.code);
+  console.log('📨 Response data:', JSON.stringify(response.data, null, 2));
+
+  if (response.data.code !== 0) {
+    console.error('A2E Nano Banana API Error:', response.data);
+    throw new Error(`A2E API Error: ${response.data.message || 'Unknown error'}`);
+  }
+
+  // Poll for completion
+  const taskId = response.data.data._id;
+  console.log('🆔 Task ID:', taskId);
+  
+  for (let i = 0; i < 60; i++) {
+    console.log(`🔄 Polling attempt ${i + 1}/60...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    let statusResponse;
+    let statusData;
+    
+    try {
+      // First try the direct Nano Banana status endpoint
+      statusResponse = await withImageRetries(() => axios.get(
+        `${config.baseUrl}/userNanoBanana/${taskId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${config.apiKey}`
+          }
+        }
+      ));
+      statusData = statusResponse.data.data || statusResponse.data;
+      console.log(`📊 Direct status response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
+    } catch (directError) {
+      console.log(`⚠️ Direct status check failed, trying awsResult:`, directError.message);
+      
+      try {
+        // Fallback to awsResult endpoint
+        statusResponse = await withImageRetries(() => axios.post(
+          `${config.baseUrl}/video/awsResult`,
+          { _id: taskId },
+          {
+            headers: {
+              'Authorization': `Bearer ${config.apiKey}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        ));
+        
+        console.log(`📊 AwsResult response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
+        
+        // Check if data is an array (empty) or actual data
+        if (Array.isArray(statusResponse.data.data) && statusResponse.data.data.length === 0) {
+          console.log(`⚠️ AwsResult returned empty array, task may still be processing`);
+          statusData = { current_status: 'processing' }; // Assume still processing
+        } else {
+          statusData = statusResponse.data.data;
+        }
+      } catch (awsError) {
+        console.log(`⚠️ Both status endpoints failed:`, awsError.message);
+        continue; // Skip this iteration
+      }
+    }
+    
+    const currentStatus = statusData?.status || statusData?.current_status;
+    console.log(`📊 Current status: ${currentStatus}`);
+    
+    if (currentStatus === 'completed') {
+      const imageUrl = statusData.result || statusData.url || statusData.image_url;
+      
+      if (imageUrl) {
+        console.log('✅ Image generation completed! URL:', imageUrl);
+        // Fetch the image content from the URL provided by A2E
+        const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
+        console.log('✅ Image downloaded and converted to base64');
+        return `data:image/png;base64,${base64}`;
+      } else {
+        throw new Error('Image generation completed but no URL returned');
+      }
+    } else if (currentStatus === 'failed') {
+      throw new Error(`Image generation failed: ${statusData.error || statusData.failed_message || 'unknown error'}`);
+    } else {
+      console.log(`⏳ Still processing... Status: ${currentStatus}`);
+    }
+  }
+  
+  throw new Error('Image generation timed out');
 };
 
-// Stability AI integration
-const generateWithStability = async (params) => {
-  const config = IMAGE_APIS.stability;
+
+// A2E image-to-video integration
+const generateWithA2EImageToVideo = async (params) => {
+  const config = IMAGE_APIS.a2eImageToVideo;
 
   const response = await axios.post(
-    `${config.baseUrl}/generation/${config.model}/text-to-image`,
+    `${config.baseUrl}/userVideoTwin/startTraining`,
     {
-      text_prompts: [{
-        text: params.prompt,
-        weight: 1
-      }],
-      cfg_scale: 7,
-      height: 1024,
-      width: 1024,
-      samples: 1,
-      steps: 20
+      name: "Omni-AI Generated Video",
+      gender: "female", // Assuming a default gender for video generation
+      image_url: params.imageUrl, // Assuming the image URL is passed in params
+      image_backgroud_color: 'rgb(255,255,255)'
     },
     {
       headers: {
         'Authorization': `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      timeout: 60000
-    }
-  );
-
-  return response.data.artifacts[0].base64;
-};
-
-// Replicate integration
-const generateWithReplicate = async (params) => {
-  const config = IMAGE_APIS.replicate;
-
-  const response = await axios.post(
-    `${config.baseUrl}/predictions`,
-    {
-      version: config.model.split(':')[1],
-      input: {
-        prompt: params.prompt,
-        negative_prompt: params.negativePrompt || '',
-        width: 1024,
-        height: 1024,
-        num_outputs: 1
-      }
-    },
-    {
-      headers: {
-        'Authorization': `Token ${config.apiKey}`,
         'Content-Type': 'application/json'
       },
-      timeout: 60000
+      timeout: 600000 // Increased timeout for A2E
     }
   );
 
-  // For Replicate, we'd need to poll for completion
-  // This is a simplified version
-  return `https://replicate.com/api/predictions/${response.data.id}/output`;
+  console.log('A2E API Response:', JSON.stringify(response.data, null, 2));
+
+  if (response.data.code !== 0 || !response.data.data) {
+    throw new Error(`A2E API Error: ${response.data.message || 'Unknown error'}`);
+  }
+
+  return response.data.data.video_url; // Assuming the API returns a video URL
+};
+
+// A2E image editing or text-to-image via Nano Banana
+const a2eNanoBananaStartInternal = async (payload) => {
+  const config = IMAGE_APIS.a2eTextToImage; // Same base: video.a2e.ai/api/v1
+  try {
+    const response = await axios.post(
+      `${config.baseUrl}/userNanoBanana/start`,
+      payload,
+      {
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 120000
+      }
+    );
+
+    if (response.data.code !== 0) {
+      console.error('A2E NanoBanana API error payload:', response.data);
+      throw new Error(`A2E NanoBanana error: ${response.data.message || JSON.stringify(response.data)}`);
+    }
+    return response.data.data; // Task info
+  } catch (err) {
+    console.error('A2E NanoBanana axios error:', { status: err.response?.status, data: err.response?.data, message: err.message });
+    throw err;
+  }
 };
 
 // Helper function to get OpenAI image size
@@ -1080,6 +1123,72 @@ const getAllImages = async (req, res) => {
   }
 };
 
+// A2E image-to-video
+const a2eImageToVideo = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Image file is required' });
+    }
+
+    const { name, gender } = req.body;
+
+    // Upload image to a temporary storage and get the URL
+    const imageUrl = await uploadImageAndGetUrl(req.file);
+
+    const videoUrl = await generateWithA2EImageToVideo({ imageUrl, name, gender });
+
+    res.status(200).json({
+      success: true,
+      message: 'Video generation started successfully',
+      data: {
+        videoUrl
+      }
+    });
+  } catch (error) {
+    console.error('A2E imageToVideo error:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Video generation failed' });
+  }
+};
+
+// Local upload helper
+const uploadImageAndGetUrl = async (file) => {
+  console.log('Uploading image:', file.originalname);
+  return await saveBufferToUploads(file.originalname, file.buffer);
+};
+
+// @desc    A2E image editing or text-to-image (Nano Banana)
+// @route   POST /api/images/a2e/edit
+// @access  Private (Premium)
+const a2eImageEdit = async (req, res) => {
+  try {
+    const { prompt, name } = req.body || {};
+
+    const payload = {
+      name: name || 'A2E Edit',
+      prompt: prompt || ''
+    };
+
+    // Support editing with an input image via multipart or URL
+    const inputImages = [];
+    if (req.file) {
+      const url = await uploadImageAndGetUrl(req.file);
+      inputImages.push(url);
+    }
+    if (req.body?.inputImageUrl) {
+      inputImages.push(req.body.inputImageUrl);
+    }
+    if (inputImages.length > 0) {
+      payload.input_images = inputImages;
+    }
+
+    const task = await a2eNanoBananaStartInternal(payload);
+    return res.status(202).json({ success: true, data: task });
+  } catch (error) {
+    console.error('A2E image edit error:', { status: error.response?.status, data: error.response?.data, message: error.message });
+    return res.status(500).json({ success: false, message: error?.message || 'A2E edit failed' });
+  }
+};
+
 module.exports = {
   generateImage,
   getImageJob,
@@ -1091,5 +1200,8 @@ module.exports = {
   getPublicImage,
   getUserImages,
   deleteImage,
-  getAllImages
+  getAllImages,
+  a2eImageToVideo,
+  a2eImageEdit,
+  generateWithA2ETextToImage  // Export for reuse in avatar controller
 };

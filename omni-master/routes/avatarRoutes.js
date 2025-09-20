@@ -1,21 +1,44 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const {
   generateAvatar,
+  generateAvatarFromImage,
   getAvatarJob,
   getUserAvatars,
   getAvatar,
   deleteAvatar,
   serveAvatar,
-  saveImageToAvatars
+  saveImageToAvatars,
+  migrateAvatarsToA2E,
+  testAvatarGeneration
 } = require('../controllers/avatarController');
 const { protect } = require('../middleware/auth');
 const { requirePremium } = require('../middleware/subscription');
+const Avatar = require('../models/Avatar');
+
+// Multer setup for image uploads
+const upload = multer({ storage: multer.memoryStorage() });
 
 // @route   POST /api/avatars/generate
-// @desc    Generate a new avatar
+// @desc    Generate a new avatar from text
 // @access  Private (Premium)
 router.post('/generate', protect, requirePremium, generateAvatar);
+
+// @route   POST /api/avatars/generate-from-image
+// @desc    Generate a new avatar from an image
+// @access  Private (Premium)
+router.post('/generate-from-image', protect, requirePremium, upload.single('avatarImage'), generateAvatarFromImage);
+
+// @route   POST /api/avatars/migrate-to-a2e
+// @desc    Make existing avatars A2.E compatible
+// @access  Private
+router.post('/migrate-to-a2e', protect, migrateAvatarsToA2E);
+
+// @route   POST /api/avatars/test
+// @desc    Test avatar generation system
+// @access  Private
+router.post('/test', protect, testAvatarGeneration);
 
 // @route   GET /api/avatars/job/:jobId
 // @desc    Get avatar generation job status

@@ -24,6 +24,14 @@ const processMessagesForImageUrls = (messages) => {
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
+// Normalize unknown error payloads to human-readable strings
+const toMessageString = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (value.message && typeof value.message === 'string') return value.message;
+  try { return JSON.stringify(value); } catch (_) { return String(value); }
+};
+
 // Neutral, general-purpose assistant system prompt
 const NEUTRAL_SYSTEM_PROMPT = `You are a helpful, knowledgeable, and safe general-purpose AI assistant.
 
@@ -63,7 +71,7 @@ const handleImageGeneration = async (chat, imagePrompt, imageStyle, req) => {
   });
 
   if (!imageResponse.data.success) {
-    throw new Error(imageResponse.data.message || 'Image generation failed');
+    throw new Error(toMessageString(imageResponse.data.message) || 'Image generation failed');
   }
 
   // For async generation, poll for completion
@@ -87,7 +95,7 @@ const handleImageGeneration = async (chat, imagePrompt, imageStyle, req) => {
         imageUrl = jobCheckResponse.data.data.results[0].url;
         break;
       } else if (jobStatus === 'failed') {
-        throw new Error(jobCheckResponse.data.data.error || 'Image generation failed');
+        throw new Error(toMessageString(jobCheckResponse.data.data?.error) || 'Image generation failed');
       }
     }
   }
@@ -125,35 +133,28 @@ const handleAvatarGeneration = async (chat, avatarPrompt, req) => {
   });
 
   if (!avatarResponse.data.success) {
-    throw new Error(avatarResponse.data.message || 'Avatar generation failed');
+    throw new Error(toMessageString(avatarResponse.data.message) || 'Avatar generation failed');
   }
 
-  // For async generation, poll for completion
-  let jobId = avatarResponse.data.data.jobId;
-  let jobStatus = avatarResponse.data.data.status;
+  // For async generation, poll for completion via DB (avoid HTTP self-calls)
+  const jobId = avatarResponse.data.data.jobId;
   let avatarUrl = null;
   let imageId = null;
-
-  while (jobStatus === 'pending' || jobStatus === 'processing') {
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const jobCheckResponse = await axios.get(`${process.env.API_BASE_URL || 'http://localhost:3001'}/api/avatars/job/${jobId}`, {
-      headers: {
-        'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`
-      }
-    });
-
-    if (jobCheckResponse.data.success) {
-      jobStatus = jobCheckResponse.data.data.status;
-      
-      if (jobStatus === 'completed' && jobCheckResponse.data.data.results && jobCheckResponse.data.data.results.length > 0) {
-        avatarUrl = jobCheckResponse.data.data.results[0].url;
-        imageId = jobCheckResponse.data.data.results[0].imageId;
-        break;
-      } else if (jobStatus === 'failed') {
-        throw new Error(jobCheckResponse.data.data.error || 'Avatar generation failed');
-      }
+  const GenerationJob = require('../models/GenerationJob');
+  const startAt = Date.now();
+  while (Date.now() - startAt < 180000) { // up to 3 minutes
+    const job = await GenerationJob.findById(jobId);
+    if (!job) break;
+    const status = job.status;
+    if (status === 'completed' && Array.isArray(job.results) && job.results.length > 0) {
+      avatarUrl = job.results[0].url;
+      imageId = job.results[0].imageId;
+      break;
     }
+    if (status === 'failed') {
+      throw new Error(toMessageString(job.error) || 'Avatar generation failed');
+    }
+    await new Promise(r => setTimeout(r, 2000));
   }
 
   if (!avatarUrl) {
@@ -412,7 +413,11 @@ const sendMessage = async (req, res) => {
         return;
 
       } catch (error) {
-        console.error('Avatar generation error in chat:', error);
+        console.error('Avatar generation error in chat:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message
+        });
         const errorResponse = `I encountered an error while generating your avatar: ${error.message}`;
         
         await chat.addMessage('assistant', errorResponse);

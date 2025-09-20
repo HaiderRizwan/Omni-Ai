@@ -38,6 +38,8 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
     eyeColor: '#4A90E2',
     skinTone: '#FDBCB4'
   });
+  const [generationMode, setGenerationMode] = useState('text'); // 'text' or 'image'
+  const [uploadedImage, setUploadedImage] = useState(null);
 
   // Debug: Monitor generatedAvatar state changes
   useEffect(() => {
@@ -251,7 +253,8 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (generationMode === 'text' && !prompt.trim()) return;
+    if (generationMode === 'image' && !uploadedImage) return;
 
     setIsGenerating(true);
     
@@ -260,155 +263,130 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
       const token = safeLocalStorage.getItem('token');
       if (!token) throw new Error('Please log in to generate avatars.');
 
-      // Use chat command system instead of direct API call (like ImageCreator)
-      console.log('Base prompt:', prompt);
-      console.log('Settings:', settings);
-      console.log('Customization:', customization);
-
-      // The avatar generation will be handled by the chat controller when we send the /avatar command
-
-      // Create backend chat if needed, then save to server chat
-      let serverChatId = currentChat?.serverId || currentChat?._id;
-      
-      // If no server chat ID exists, create one
-      if (!serverChatId) {
-        try {
-          console.log('Creating new backend chat for avatar generation');
-          
-          const createResponse = await fetch(`${apiBase}/api/chat`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ 
-              title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
-              chatType: 'avatar'
-            })
-          });
-
-          if (createResponse.ok) {
-            const chatData = await createResponse.json();
-            serverChatId = chatData.data._id;
-            console.log('Created new backend chat:', serverChatId);
-            
-            // Update the current chat with the server ID
-            if (onChatUpdate) {
-              onChatUpdate({ 
-                id: currentChat?.id || Date.now().toString(),
-                serverId: serverChatId, 
-                title: chatData.data.title || prompt.slice(0, 50) + (prompt.length > 50 ? '...' : '')
-              });
-            }
-          } else {
-            console.error('Failed to create backend chat:', createResponse.status);
-          }
-        } catch (error) {
-          console.error('Error creating backend chat:', error);
-        }
-      }
-      
-      // Save to server chat if we have a server chat ID
-      if (serverChatId) {
-        try {
-          console.log('Saving avatar generation to server chat:', serverChatId);
-          
-          // Send the avatar command to the server chat with character settings
-          const chatPayload = {
-            message: `/avatar ${prompt}`,
-            stream: false,
+      if (generationMode === 'text') {
+        // Simplified direct avatar pipeline: start job and poll backend
+        const startRes = await fetch(`${apiBase}/api/avatars/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            mode: 'text',
+            prompt,
+            aspectRatio: '1:1',
+            style: settings.style,
             characterSettings: settings,
-            customization: customization
-          };
-          
-          const chatRes = await fetch(`${apiBase}/api/chat/${serverChatId}/message`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(chatPayload)
+            customization
+          })
+        });
+
+        if (!startRes.ok) {
+          const t = await startRes.text().catch(() => '');
+          throw new Error(`Start failed: ${startRes.status}${t ? ` - ${t}` : ''}`);
+        }
+
+        const startJson = await startRes.json();
+        const jobId = startJson?.data?.jobId;
+        if (!jobId) throw new Error('No jobId returned by server');
+
+        const poll = async () => {
+          const res = await fetch(`${apiBase}/api/avatars/job/${jobId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
           });
-          
-          if (chatRes.ok) {
-            const chatData = await chatRes.json();
-            console.log('Chat response received:', chatData);
-            
-            // Check if the response contains avatar data
-            if (chatData.data && chatData.data.avatar) {
-              const avatarUrl = chatData.data.avatar;
-              const imageId = chatData.data.imageId;
-              
-              console.log('🎨 Avatar received from chat response:', avatarUrl);
-              console.log('🖼️ Image ID received from chat response:', imageId);
-              
-              // Set the generated avatar for immediate display
-              setGeneratedAvatar(avatarUrl);
-              
-              // Update chat history with both user and assistant messages
-              if (onChatUpdate) {
-                const trimmed = (prompt || '').trim();
-                const titleBase = trimmed.slice(0, 50);
-                const title = titleBase && trimmed.length > 50 ? `${titleBase}...` : titleBase || (currentChat?.title || 'Avatar Generation');
-                
-                const newMessages = [
-                  ...(currentChat?.messages || []),
-                  { type: 'user', content: prompt, timestamp: Date.now() },
-                  { 
-                    type: 'assistant', 
-                    content: `I've generated an avatar based on your prompt: "${prompt}"`, 
-                    avatar: avatarUrl, 
-                    imageId: imageId,
-                    originalPrompt: prompt,
-                    technicalPrompt: prompt,
-                    timestamp: Date.now() 
-                  }
-                ];
-                
-                console.log('Updating chat history with avatar:', newMessages.map(m => ({
-                  type: m.type,
-                  content: m.content,
-                  hasAvatar: !!m.avatar,
-                  avatarUrl: m.avatar
-                })));
-                
-                onChatUpdate({
-                  messages: newMessages,
-                  ...(title ? { title } : {})
-                });
-              }
-            } else {
-              console.log('No avatar data in chat response, waiting for completion...');
-            }
-          } else {
-            console.error('Failed to save to server chat:', chatRes.status);
+          if (!res.ok) {
+            const t = await res.text().catch(() => '');
+            throw new Error(`Status failed: ${res.status}${t ? ` - ${t}` : ''}`);
           }
-        } catch (error) {
-          console.error('Error saving to server chat:', error);
+          const json = await res.json();
+          return json?.data;
+        };
+
+        const startTime = Date.now();
+        let job;
+        while (true) {
+          job = await poll();
+          if (job?.status === 'completed') break;
+          if (job?.status === 'failed') {
+            const errObj = job?.error;
+            const errMsg = (errObj && (errObj.message || errObj.code)) ? `${errObj.message || ''}${errObj.code ? ` (${errObj.code})` : ''}` : null;
+            const errDetails = errObj ? JSON.stringify(errObj) : '';
+            throw new Error(errMsg || errDetails || 'Avatar generation failed');
+          }
+          if (Date.now() - startTime > 180000) throw new Error('Avatar generation timed out');
+          await new Promise(r => setTimeout(r, 3000));
+        }
+
+        const result = Array.isArray(job?.results) ? job.results[0] : null;
+        const avatarUrl = result?.url;
+        const imageId = result?.imageId;
+        if (!avatarUrl) throw new Error('No avatar URL in job result');
+
+        setGeneratedAvatar(avatarUrl);
+
+        // Optionally append to chat if exists
+        let serverChatId = currentChat?.serverId || currentChat?._id;
+        if (serverChatId) {
+          try {
+            const chatPayload = {
+              message: `Avatar generated: ${prompt}`,
+              avatar: avatarUrl,
+              imageId
+            };
+            await fetch(`${apiBase}/api/chat/${serverChatId}/avatar-message`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(chatPayload)
+            });
+          } catch (e) {
+            console.warn('Failed to append avatar to chat:', e);
+          }
+        }
+
+        // Update local chat UI
+        if (onChatUpdate) {
+          const trimmed = (prompt || '').trim();
+          const titleBase = trimmed.slice(0, 50);
+          const title = titleBase && trimmed.length > 50 ? `${titleBase}...` : titleBase || (currentChat?.title || 'Avatar Generation');
+          const newMessages = [
+            ...(currentChat?.messages || []),
+            { type: 'user', content: prompt, timestamp: Date.now() },
+            { type: 'assistant', content: `I've generated an avatar based on your prompt: "${prompt}"`, avatar: avatarUrl, imageId, originalPrompt: prompt, technicalPrompt: prompt, timestamp: Date.now() }
+          ];
+          onChatUpdate({ messages: newMessages, ...(title ? { title } : {}) });
+        }
+      } else if (generationMode === 'image') {
+        // Image-to-Avatar Logic
+        const formData = new FormData();
+        formData.append('avatarImage', uploadedImage);
+        formData.append('name', 'user_uploaded_avatar');
+        formData.append('gender', settings.gender || 'any');
+
+        const response = await fetch(`${apiBase}/api/avatars/generate-from-image`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          // Handle the response - maybe start polling for the avatar task
+          console.log('Image-to-avatar task started:', result.data);
+          alert('Avatar generation from image has started. You will be notified upon completion.');
+        } else {
+          throw new Error(result.message || 'Image-to-avatar generation failed');
         }
       }
-
-      console.log('🎨 Avatar generation command sent to chat system');
 
     } catch (error) {
       console.error('Error generating avatar:', error);
-      
-      // Better error message handling
-      let errorMessage = 'Unknown error occurred';
-      
-      if (error?.message) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      } else if (typeof error === 'object') {
-        try {
-          errorMessage = JSON.stringify(error, null, 2);
-        } catch (e) {
-          errorMessage = String(error);
-        }
-      }
-      
-      alert(`Error generating avatar: ${errorMessage}`);
+      alert(`Error generating avatar: ${error.message}`);
     } finally {
       setIsGenerating(false);
     }
@@ -463,6 +441,28 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
               New Chat
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Generation Mode Switch */}
+      <div className="p-4 bg-gray-900/50 border-b border-gray-800/50 flex justify-center">
+        <div className="flex items-center gap-2 p-1 rounded-lg bg-gray-800">
+          <button
+            onClick={() => setGenerationMode('text')}
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              generationMode === 'text' ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            Text to Avatar
+          </button>
+          <button
+            onClick={() => setGenerationMode('image')}
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              generationMode === 'image' ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            Image to Avatar
+          </button>
         </div>
       </div>
 
@@ -908,29 +908,52 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
           {/* Input Area */}
           <div className="p-6 border-t border-gray-800/50">
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
+            {generationMode === 'text' ? (
+              <div className="flex gap-3">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Describe the avatar you want to create..."
+                    className="w-full p-4 pr-12 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20"
+                    onKeyPress={(e) => e.key === 'Enter' && handleGenerate()}
+                  />
+                  <button
+                    onClick={handleGenerate}
+                    disabled={!prompt.trim() || isGenerating}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    {isGenerating ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-4">
                 <input
-                  type="text"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Describe the avatar you want to create..."
-                  className="w-full p-4 pr-12 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20"
-                  onKeyPress={(e) => e.key === 'Enter' && handleGenerate()}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setUploadedImage(e.target.files[0])}
+                  className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-500 file:text-white hover:file:bg-red-600"
                 />
                 <button
                   onClick={handleGenerate}
-                  disabled={!prompt.trim() || isGenerating}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  disabled={!uploadedImage || isGenerating}
+                  className="w-full max-w-xs p-3 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                 >
                   {isGenerating ? (
                     <RefreshCw className="w-5 h-5 animate-spin" />
                   ) : (
                     <Send className="w-5 h-5" />
                   )}
+                  Generate from Image
                 </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

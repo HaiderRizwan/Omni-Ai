@@ -2,7 +2,13 @@ const GenerationJob = require('../models/GenerationJob');
 const Avatar = require('../models/Avatar');
 const Image = require('../models/Image');
 const axios = require('axios');
-const { HfInference } = require('@huggingface/inference');
+const https = require('https');
+const http = require('http');
+const { saveBufferToUploads } = require('../utils/localUploader');
+
+// Import the working A2E image generation function from imageController
+const { generateWithA2ETextToImage } = require('./imageController');
+// Simplified: remove non-A2E providers
 
 // Image generation API configurations (same as imageController)
 const IMAGE_APIS = {
@@ -28,21 +34,38 @@ const IMAGE_APIS = {
     apiKey: process.env.REPLICATE_API_KEY,
     model: 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
     maxSize: '1024x1024'
+  },
+  a2e: {
+    baseUrl: 'https://video.a2e.ai/api/v1',
+    apiKey: process.env.A2E_API_KEY
   }
 };
 
-const DEFAULT_PROVIDER = process.env.IMAGE_PROVIDER || (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'openai');
+const DEFAULT_PROVIDER = 'a2e';
 
-// @desc    Generate avatar
+// @desc    Generate avatar from text or image
 // @route   POST /api/avatars/generate
 // @access  Private (Premium)
 const generateAvatar = async (req, res) => {
+  const { mode = 'text', prompt } = req.body;
+
+  if (mode === 'text') {
+    return generateAvatarFromText(req, res);
+  } else if (mode === 'image') {
+    return generateAvatarFromImage(req, res);
+  } else {
+    return res.status(400).json({ success: false, message: 'Invalid generation mode' });
+  }
+};
+
+// @desc    Generate avatar from text using A2E
+// @access  Private (Premium)
+const generateAvatarFromText = async (req, res) => {
   try {
-    console.log('=== AVATAR CONTROLLER DEBUG BOX ===');
-    console.log('Function: generateAvatar');
-    console.log('Request body:', req.body);
-    console.log('User ID:', req.user?._id);
-    console.log('==================================');
+    console.log('\n=== AVATAR CONTROLLER (TEXT) - START ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('User ID:', req.user._id);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     
     const {
       prompt,
@@ -53,90 +76,115 @@ const generateAvatar = async (req, res) => {
       customization = {}
     } = req.body;
 
+    console.log('Extracted parameters:');
+    console.log('- Prompt:', prompt);
+    console.log('- Aspect Ratio:', aspectRatio);
+    console.log('- Style:', style);
+    console.log('- Negative Prompt:', negativePrompt);
+
     if (!prompt) {
+      console.log('❌ ERROR: Missing prompt');
       return res.status(400).json({
         success: false,
         message: 'Prompt is required for avatar generation'
       });
     }
 
-    // Check if user has premium access
-    if (!req.user.canAccessPremium()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Premium subscription required for avatar generation'
-      });
-    }
+    console.log('📝 Building character prompt...');
+    // Create a detailed prompt
+    const detailedPrompt = buildCharacterPrompt(prompt, characterSettings, customization);
+    console.log('✅ Detailed prompt created:', detailedPrompt);
 
-    // Determine the best available provider
-    let provider;
-    if (process.env.OPENAI_API_KEY) {
-      provider = 'openai';
-    } else if (process.env.HF_TOKEN) {
-      provider = 'huggingface';
-    } else if (process.env.OPENROUTER_API_KEY) {
-      provider = 'openrouter';
-    } else if (process.env.STABILITY_API_KEY) {
-      provider = 'stability';
-    } else if (process.env.REPLICATE_API_KEY) {
-      provider = 'replicate';
-    } else {
-      console.error('No API keys found!');
-      return res.status(400).json({
-        success: false,
-        message: 'No image generation API keys configured. Please set OPENAI_API_KEY, HF_TOKEN, or another image API key.',
-        availableProviders: ['openai', 'huggingface', 'openrouter', 'stability', 'replicate']
-      });
-    }
-
-    console.log('Selected provider:', provider);
-
-    // Build character-specific prompt
-    const characterPrompt = buildCharacterPrompt(prompt, characterSettings, customization);
-    console.log('Generated character prompt:', characterPrompt);
-
-    // Create generation job
+    console.log('💾 Creating generation job...');
+    // Create a dedicated avatar job
     const job = await GenerationJob.create({
       user: req.user._id,
-      type: 'image',
+      type: 'avatar',
       status: 'pending',
-      parameters: {
-        prompt: characterPrompt,
-        aspectRatio,
-        style,
-        negativePrompt: negativePrompt || 'multiple people, crowd, group, text, watermark, signature, logo, blurry, low quality, distorted, deformed',
-        characterSettings,
-        customization
-      },
-      provider: provider
+      parameters: { prompt: detailedPrompt, originalPrompt: prompt, aspectRatio, style, negativePrompt },
+      provider: 'a2e',
+      metadata: { pipeline: 'text->image->avatar' }
     });
+    console.log('✅ Job created with ID:', job._id);
 
-    // Start avatar generation process asynchronously
-    processAvatarGeneration(job._id, {
-      prompt: characterPrompt,
-      aspectRatio,
-      style,
-      negativePrompt: negativePrompt || 'multiple people, crowd, group, text, watermark, signature, logo, blurry, low quality, distorted, deformed',
-      characterSettings,
-      customization,
-      provider
-    });
-
-    res.status(202).json({
-      success: true,
-      message: 'Avatar generation started',
-      data: {
-        jobId: job._id,
-        status: 'pending',
-        estimatedTime: '30-60 seconds'
+    console.log('🚀 Starting async avatar generation process...');
+    // Start async process - use setImmediate to ensure it runs after response
+    setImmediate(async () => {
+      try {
+        console.log('🔄 Async process starting for job:', job._id);
+        await processAvatarGenerationText(job._id, { prompt: detailedPrompt, originalPrompt: prompt, aspectRatio, negativePrompt });
+        console.log('✅ Async process completed for job:', job._id);
+      } catch (error) {
+        console.log('❌ Async process failed for job:', job._id);
+        console.log('Error:', error.message);
+        console.log('Stack:', error.stack);
       }
     });
 
+    console.log('📤 Sending response to client...');
+    res.status(202).json({
+      success: true,
+      message: 'Avatar generation from text started',
+      data: { jobId: job._id, status: 'pending' }
+    });
+    console.log('✅ Response sent successfully');
+    console.log('=== AVATAR CONTROLLER (TEXT) - END ===\n');
+
   } catch (error) {
-    console.error('Avatar generation error:', error);
+    console.log('❌ AVATAR GENERATION ERROR:');
+    console.log('- Message:', error.message);
+    console.log('- Stack:', error.stack);
+    console.log('- Response Status:', error.response?.status);
+    console.log('- Response Data:', error.response?.data);
+    
     res.status(500).json({
       success: false,
-      message: 'Avatar generation failed',
+      message: 'Avatar generation from text failed',
+      error: error.message
+    });
+    console.log('=== AVATAR CONTROLLER (TEXT) - ERROR END ===\n');
+  }
+};
+
+// @desc    Generate avatar from an uploaded image using A2E
+// @access  Private (Premium)
+const generateAvatarFromImage = async (req, res) => {
+  try {
+    console.log('=== AVATAR CONTROLLER (IMAGE) ===');
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Image file is required' });
+    }
+
+    const { gender = 'female', name } = req.body;
+
+    // Upload image to a temporary storage and get the URL
+    const imageUrl = await uploadImageAndGetUrl(req.file);
+    console.log('Image uploaded to:', imageUrl);
+
+    // Create a dedicated avatar job
+    const job = await GenerationJob.create({
+      user: req.user._id,
+      type: 'avatar',
+      status: 'pending',
+      parameters: { imageUrl, gender, name: name || 'Custom Avatar' },
+      provider: 'a2e',
+      metadata: { pipeline: 'image->avatar' }
+    });
+
+    // Start async process
+    processAvatarGenerationImage(job._id, { imageUrl, gender, name: name || 'Custom Avatar' });
+
+    res.status(202).json({
+      success: true,
+      message: 'Avatar generation from image started',
+      data: { jobId: job._id, status: 'pending' }
+    });
+
+  } catch (error) {
+    console.error('Avatar generation from image error:', { status: error.response?.status, data: error.response?.data, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Avatar generation from image failed',
       error: error.message
     });
   }
@@ -449,153 +497,375 @@ const getEyeColorDescription = (color) => {
   return eyeColors[color] || 'brown';
 };
 
-// Process avatar generation (similar to image generation)
-const processAvatarGeneration = async (jobId, params) => {
-  try {
-    const job = await GenerationJob.findById(jobId);
-    if (!job) return;
+// Helper function for local image upload
+const uploadImageAndGetUrl = async (file) => {
+  console.log('Uploading image:', file.originalname);
+  return await saveBufferToUploads(file.originalname, file.buffer);
+};
 
-    await job.updateProgress(10, 'Starting avatar generation...');
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const A2E_API_KEY = process.env.A2E_API_KEY;
+// Choose video base by env or fallback chain: env -> a2e.ai -> a2e.com.cn
+const A2E_API_BASE_URL = process.env.A2E_API_BASE_URL || 'https://api.a2e.ai/api/v1';
+let A2E_VIDEO_BASE_URL = process.env.A2E_VIDEO_BASE_URL || 'https://video.a2e.ai/api/v1';
 
-    const { prompt, aspectRatio, style, negativePrompt, characterSettings, customization, provider } = params;
-    
-    let imageUrl;
-    let imageBuffer;
-    let width, height;
+// Simple runtime fallback switch if DNS fails on first try
+const pickAltVideoBase = (current) => {
+  if (current.includes('video.a2e.ai')) return 'https://video.a2e.com.cn/api/v1';
+  return 'https://video.a2e.ai/api/v1';
+};
 
-    // Parse aspect ratio
-    const [w, h] = aspectRatio.split(':').map(Number);
-    const ratio = w / h;
-    
-    if (ratio > 1.5) {
-      width = 1024;
-      height = Math.round(1024 / ratio);
-    } else if (ratio < 0.7) {
-      height = 1024;
-      width = Math.round(1024 * ratio);
-    } else {
-      width = 1024;
-      height = 1024;
-    }
+// Resilient axios instance with keep-alive and retries for transient DNS/network errors
+const keepAliveAgentHttps = new https.Agent({ keepAlive: true });
+const keepAliveAgentHttp = new http.Agent({ keepAlive: true });
+const axiosA2E = axios.create({
+  httpAgent: keepAliveAgentHttp,
+  httpsAgent: keepAliveAgentHttps,
+  timeout: 120000
+});
 
-    await job.updateProgress(25, 'Generating avatar with AI...');
-
-    if (provider === 'huggingface') {
-      const hfToken = process.env.HF_TOKEN;
-      if (!hfToken) throw new Error('Hugging Face token not configured');
-      
-      const hf = new HfInference(hfToken);
-      const response = await hf.textToImage({
-        model: 'stabilityai/stable-diffusion-xl-base-1.0',
-        inputs: prompt,
-        parameters: {
-          negative_prompt: negativePrompt,
-          width,
-          height,
-          num_inference_steps: 20,
-          guidance_scale: 7.5
-        }
-      });
-
-      imageBuffer = Buffer.from(await response.arrayBuffer());
-      imageUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-    } else {
-      // Use the same logic as image generation for other providers
-      const apiConfig = IMAGE_APIS[provider];
-      if (!apiConfig || !apiConfig.apiKey) {
-        throw new Error(`Provider ${provider} not configured`);
+const withRetries = async (fn, { attempts = 3, delayMs = 1500 } = {}) => {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try { return await fn(); } catch (err) {
+      lastErr = err;
+      const msg = (err && err.message) || '';
+      // Retry DNS/timeouts
+      if (/EAI_AGAIN|ENOTFOUND|ETIMEDOUT|ECONNRESET|EHOSTUNREACH/i.test(msg)) {
+        await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+        continue;
       }
-
-      // Implementation for other providers would go here
-      // For now, we'll use Hugging Face as fallback
-      const hfToken = process.env.HF_TOKEN;
-      if (!hfToken) throw new Error('Hugging Face token not configured');
-      
-      const hf = new HfInference(hfToken);
-      const response = await hf.textToImage({
-        model: 'stabilityai/stable-diffusion-xl-base-1.0',
-        inputs: prompt,
-        parameters: {
-          negative_prompt: negativePrompt,
-          width,
-          height,
-          num_inference_steps: 20,
-          guidance_scale: 7.5
-        }
-      });
-
-      imageBuffer = Buffer.from(await response.arrayBuffer());
-      imageUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-    }
-
-    await job.updateProgress(75, 'Saving avatar...');
-
-    // Save avatar to database
-    const filename = `avatar_${Date.now()}.png`;
-    const avatar = await Avatar.create({
-      user: job.user,
-      prompt, // This is the technical prompt used for generation
-      originalPrompt: job.parameters.prompt, // Store the original user prompt
-      negativePrompt,
-      imageData: imageBuffer,
-      contentType: 'image/png',
-      filename,
-      size: imageBuffer.length,
-      width,
-      height,
-      characterSettings,
-      customization,
-      settings: {
-        style,
-        aspectRatio,
-        model: 'stable-diffusion-xl-base-1.0'
-      },
-      metadata: {
-        provider,
-        generationTime: Date.now() - job.createdAt.getTime(),
-        originalPrompt: job.parameters.prompt,
-        characterType: 'avatar'
-      }
-    });
-
-    // Note: Avatars are only saved to Avatar collection, not Image collection
-
-    await job.updateProgress(90, 'Finalizing...');
-
-    // Update job with results
-    await job.updateProgress(100, 'Avatar generation completed');
-    job.status = 'completed';
-    job.results = [{
-      url: avatar.getAvatarUrl(),
-      id: avatar._id,
-      imageId: avatar._id, // Use avatar ID as imageId for collection functionality
-      filename: avatar.filename,
-      size: avatar.size,
-      width: avatar.width,
-      height: avatar.height
-    }];
-    await job.save();
-
-    console.log('Avatar generation completed:', avatar._id);
-
-  } catch (error) {
-    console.error('Avatar generation process error:', error);
-    
-    try {
-      const job = await GenerationJob.findById(jobId);
-      if (job) {
-        job.status = 'failed';
-        job.error = {
-          message: error.message,
-          code: error.code || 'GENERATION_FAILED'
-        };
-        await job.save();
-      }
-    } catch (updateError) {
-      console.error('Failed to update job status:', updateError);
+      break;
     }
   }
+  throw lastErr;
 };
+
+// Helper to get dimensions from aspect ratio
+const getDimensions = (aspectRatio) => {
+  switch (aspectRatio) {
+    case '1:1': return { width: 1024, height: 1024 };
+    case '4:3': return { width: 1024, height: 768 };
+    case '3:4': return { width: 768, height: 1024 };
+    case '16:9': return { width: 1024, height: 576 };
+    case '9:16': return { width: 576, height: 1024 };
+    default: return { width: 1024, height: 1024 };
+  }
+};
+
+// Helper to enhance prompt with an LLM
+const enhancePromptWithLLM = async (basePrompt) => {
+  if (!OPENROUTER_API_KEY) {
+    console.warn('OpenRouter API key not set. Skipping prompt enhancement.');
+    return basePrompt;
+  }
+  try {
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: 'openai/gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are an expert in creating detailed, vivid prompts for an AI image generator. Enhance the following user prompt to be more descriptive and artistic. Focus on physical characteristics, style, lighting, and composition. The output should be only the prompt itself.' },
+          { role: 'user', content: basePrompt }
+        ]
+      },
+      {
+        headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}` }
+      }
+    );
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('Error enhancing prompt with LLM:', error.message);
+    return basePrompt; // Fallback to original prompt on error
+  }
+};
+
+
+// Main async processor for text-to-avatar generation
+const processAvatarGenerationText = async (jobId, params) => {
+    console.log('\n🚀 === ASYNC AVATAR GENERATION START ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Job ID:', jobId);
+    console.log('Params:', JSON.stringify(params, null, 2));
+    
+    // Check environment variables
+    console.log('🔧 Environment check:');
+    console.log('- A2E_API_KEY present:', !!A2E_API_KEY);
+    console.log('- A2E_VIDEO_BASE_URL:', A2E_VIDEO_BASE_URL);
+    console.log('- OPENROUTER_API_KEY present:', !!OPENROUTER_API_KEY);
+    
+    if (!A2E_API_KEY) {
+        console.log('❌ CRITICAL: A2E_API_KEY is missing!');
+        throw new Error('A2E_API_KEY is not configured');
+    }
+    
+    let job;
+    try {
+        console.log('📋 Finding job in database...');
+        job = await GenerationJob.findById(jobId);
+        
+        if (!job) {
+            console.log('❌ Job not found in database:', jobId);
+            return;
+        }
+        console.log('✅ Job found:', job._id, 'Status:', job.status);
+
+        console.log('🎬 Starting job...');
+        await job.start();
+        console.log('✅ Job started successfully');
+        
+        await job.updateProgress(5, 'Starting avatar pipeline...');
+        console.log('📊 Progress updated to 5%');
+        
+        const { prompt: originalPrompt, aspectRatio, negativePrompt } = params;
+        console.log('📝 Processing parameters:');
+        console.log('- Original Prompt:', originalPrompt);
+        console.log('- Aspect Ratio:', aspectRatio);
+        console.log('- Negative Prompt:', negativePrompt);
+
+        // Step 1: Enhance Prompt
+        console.log('\n--- STEP 1: PROMPT ENHANCEMENT ---');
+        await job.updateProgress(10, 'Enhancing prompt...');
+        console.log('🧠 Enhancing prompt with LLM...');
+        
+        const enhancedPrompt = await enhancePromptWithLLM(originalPrompt);
+        console.log('✅ Enhanced prompt:', enhancedPrompt);
+
+        const { width, height } = getDimensions(aspectRatio);
+        console.log('📐 Image dimensions:', { width, height });
+
+        // Step 2: Generate Image using the exact same function as imageController
+        console.log('\n--- STEP 2: IMAGE GENERATION ---');
+        await job.updateProgress(20, 'Generating image with A2E (using imageController function)...');
+        console.log('🎨 Using the exact same function as imageController...');
+        
+        let imageBase64 = null;
+        let imageUrl = null;
+        
+        try {
+          // Use the exact same function from imageController
+          console.log('📡 Calling generateWithA2ETextToImage with prompt:', enhancedPrompt);
+          imageBase64 = await generateWithA2ETextToImage({ prompt: enhancedPrompt });
+          console.log('✅ Image generation completed successfully!');
+          console.log('📊 Image base64 length:', imageBase64.length);
+          
+          // Convert base64 to buffer and save as temporary file to get URL
+          console.log('💾 Converting base64 to temporary file...');
+          const base64Data = imageBase64.split(',')[1]; // Remove data:image/png;base64, prefix
+          const imageBuffer = Buffer.from(base64Data, 'base64');
+          
+          // Save to temporary storage to get a URL that A2E can access
+          const tempFileName = `temp_avatar_${Date.now()}.png`;
+          const tempImageUrl = await saveBufferToUploads(tempFileName, imageBuffer);
+          imageUrl = tempImageUrl;
+          
+          console.log('✅ Image saved to temporary storage');
+          console.log('🔗 Temporary image URL:', imageUrl);
+          
+        } catch (error) {
+          console.log('❌ Image generation failed:', error.message);
+          throw error;
+        }
+
+        // Step 3: Create Avatar from Generated Image
+        console.log('\n--- STEP 3: CREATING AVATAR FROM GENERATED IMAGE ---');
+        await job.updateProgress(50, 'Creating avatar from generated image...');
+        
+        try {
+          console.log('🎭 Starting avatar creation with generated image...');
+          console.log('📸 Image URL:', imageUrl);
+          
+          // Validate that we have a proper image URL
+          if (!imageUrl) {
+            throw new Error('No image URL available for avatar creation');
+          }
+          
+          // Register Image as A2E Avatar to get Anchor ID
+          const trainingPayload = {
+            name: `avatar_${job.user}_${Date.now()}`,
+            gender: 'female',
+            image_url: imageUrl,
+            image_backgroud_color: 'rgb(255,255,255)'
+          };
+          
+          console.log('📤 Avatar training payload:', JSON.stringify(trainingPayload, null, 2));
+          
+          const trainingResponse = await withRetries(() => axiosA2E.post(`${A2E_VIDEO_BASE_URL}/userVideoTwin/startTraining`, trainingPayload, { 
+            headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json', 'x-lang': 'en-US' } 
+          }));
+          
+          console.log('📨 Training response:', JSON.stringify(trainingResponse.data, null, 2));
+
+          if (trainingResponse.data.code !== 0) {
+            throw new Error(`A2E avatar training start failed: ${trainingResponse.data.message || JSON.stringify(trainingResponse.data)}`);
+          }
+          
+          const trainingTaskId = trainingResponse.data.data._id;
+          console.log('🆔 Training task ID:', trainingTaskId);
+          
+          // Store training task id for traceability
+          job.metadata = job.metadata || {};
+          job.metadata.a2eTrainingTaskId = trainingTaskId;
+          await job.save();
+
+          // Poll for training completion
+          console.log('\n--- STEP 4: POLLING AVATAR TRAINING ---');
+          await job.updateProgress(60, 'Training avatar model...');
+          let trainingStatus = 'initialized';
+          let userVideoTwinId = null;
+          
+          for (let i = 0; i < 120; i++) { // Poll for up to 10 minutes
+            console.log(`🔄 Training poll ${i + 1}/120...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            
+            let statusResponse;
+            try {
+              statusResponse = await withRetries(() => axiosA2E.get(`${A2E_VIDEO_BASE_URL}/userVideoTwin/${trainingTaskId}`, { 
+                headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+              }));
+            } catch (err) {
+              const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
+              console.warn('Retrying A2E status using alternate base:', alt);
+              statusResponse = await withRetries(() => axiosA2E.get(`${alt}/userVideoTwin/${trainingTaskId}`, { 
+                headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+              }));
+              A2E_VIDEO_BASE_URL = alt;
+            }
+            
+            const statusData = statusResponse.data?.data || {};
+            trainingStatus = statusData.current_status;
+            userVideoTwinId = statusData.user_video_twin_id || statusData.video_twin_id || userVideoTwinId;
+            
+            console.log(`📊 Training poll ${i + 1}: Status = ${trainingStatus}, Twin ID = ${userVideoTwinId}`);
+            
+            if (trainingStatus === 'completed') {
+              console.log('✅ Avatar training completed!');
+              break;
+            } else if (trainingStatus === 'failed') {
+              throw new Error(`A2E avatar training failed: ${statusData.failed_message || 'unknown error'}`);
+            }
+            
+            // Update progress based on training status
+            const progressMap = {
+              'initialized': 60,
+              'processing': 70,
+              'training': 80,
+              'generating': 85
+            };
+            const currentProgress = progressMap[trainingStatus] || 70;
+            await job.updateProgress(currentProgress, `Training status: ${trainingStatus}`);
+          }
+          
+          if (trainingStatus !== 'completed') {
+            throw new Error('A2E avatar training timed out.');
+          }
+
+          // Step 5: Get the Anchor ID
+          console.log('\n--- STEP 5: GETTING ANCHOR ID ---');
+          await job.updateProgress(90, 'Getting anchor ID...');
+          
+          const isValidObjectId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
+          const twinIdForList = isValidObjectId(userVideoTwinId) ? userVideoTwinId : (isValidObjectId(trainingTaskId) ? trainingTaskId : null);
+          
+          let a2eAnchorId = null;
+          try {
+            const url = twinIdForList
+              ? `${A2E_VIDEO_BASE_URL}/anchor/character_list?user_video_twin_id=${twinIdForList}&type=custom`
+              : `${A2E_VIDEO_BASE_URL}/anchor/character_list?type=custom`;
+            
+            console.log('🔍 Getting anchor list from:', url);
+            
+            let characterListResponse;
+            try {
+              characterListResponse = await withRetries(() => axiosA2E.get(url, { 
+                headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+              }));
+            } catch (err) {
+              const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
+              const altUrl = url.replace(A2E_VIDEO_BASE_URL, alt);
+              console.warn('Retrying A2E anchor list using alternate base:', altUrl);
+              characterListResponse = await withRetries(() => axiosA2E.get(altUrl, { 
+                headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+              }));
+              A2E_VIDEO_BASE_URL = alt;
+            }
+            
+            console.log('📨 Character list response:', JSON.stringify(characterListResponse.data, null, 2));
+            
+            if (characterListResponse.data.code === 0) {
+              const list = characterListResponse.data.data?.list || [];
+              const matched = list.find(item => item.user_video_twin_id === twinIdForList || item.video_twin_id === twinIdForList);
+              a2eAnchorId = (matched && matched._id) || (list[0] && list[0]._id) || null;
+              console.log('🎯 Found anchor ID:', a2eAnchorId);
+            }
+          } catch (e) {
+            console.warn('A2E anchor lookup warning:', e.response?.data || e.message);
+          }
+          
+          if (!a2eAnchorId) {
+            throw new Error('Could not retrieve anchor ID from A2E.');
+          }
+
+          // Step 6: Save Avatar
+          console.log('\n--- STEP 6: SAVING AVATAR ---');
+          await job.updateProgress(95, 'Saving avatar...');
+          
+          // Convert base64 to buffer for storage
+          const imageBuffer = Buffer.from(imageBase64.split(',')[1], 'base64');
+          
+          const avatar = await Avatar.create({
+            user: job.user,
+            prompt: enhancedPrompt,
+            originalPrompt: originalPrompt,
+            imageData: imageBuffer,
+            contentType: 'image/png',
+            filename: `avatar_${Date.now()}.png`,
+            size: imageBuffer.length,
+            width, 
+            height,
+            metadata: { 
+              provider: 'a2e', 
+              source: 'text-to-avatar', 
+              a2eAnchorId, 
+              a2eUserVideoTwinId: userVideoTwinId, 
+              a2eTrainingTaskId: trainingTaskId 
+            }
+          });
+
+          await job.complete([{ 
+            url: avatar.getAvatarUrl(), 
+            id: avatar._id, 
+            imageId: avatar._id, 
+            metadata: { a2eAnchorId, a2eUserVideoTwinId: userVideoTwinId, a2eTrainingTaskId: trainingTaskId } 
+          }]);
+          
+          console.log('✅ Avatar creation completed successfully!');
+          console.log('🎉 Avatar ID:', avatar._id);
+          console.log('🔗 Avatar URL:', avatar.getAvatarUrl());
+          
+        } catch (avatarError) {
+          console.log('❌ Avatar creation failed:', avatarError.message);
+          throw avatarError;
+        }
+
+  } catch (error) {
+        console.log('\n❌ === AVATAR GENERATION ERROR ===');
+        console.log('Error message:', error.message);
+        console.log('Error stack:', error.stack);
+        console.log('Response status:', error.response?.status);
+        console.log('Response data:', JSON.stringify(error.response?.data, null, 2));
+        console.log('Job ID:', jobId);
+        console.log('Job status before error:', job?.status);
+        
+        if (job) {
+            console.log('🔄 Marking job as failed...');
+            await job.fail(error.message);
+            console.log('✅ Job marked as failed');
+        }
+        console.log('=== AVATAR GENERATION ERROR END ===\n');
+    }
+};
+
 
 // @desc    Save image to avatars collection
 // @route   POST /api/avatars/save-from-image
@@ -708,14 +978,341 @@ const saveImageToAvatars = async (req, res) => {
   }
 };
 
+// @desc    Migrate existing avatars to be A2.E compatible
+// @route   POST /api/avatars/migrate-to-a2e
+// @access  Private
+const migrateAvatarsToA2E = async (req, res) => {
+    try {
+        const avatarsToMigrate = await Avatar.find({
+            user: req.user._id,
+            'metadata.a2eAnchorId': { $exists: false }
+        });
+
+        if (avatarsToMigrate.length === 0) {
+            return res.status(200).json({ success: true, message: 'All avatars are already A2.E compatible.' });
+        }
+
+        let migratedCount = 0;
+        const a2eConfig = { apiKey: process.env.A2E_API_KEY };
+
+        for (const avatar of avatarsToMigrate) {
+            try {
+                const avatarImageUrl = avatar.getAvatarUrl();
+
+                const registrationResponse = await axios.post(
+                    'https://api.a2e.ai/api/v1/userVideoTwin/startTraining',
+                    {
+                        name: `migrated_avatar_${avatar._id}`,
+                        gender: 'female', // A2E requires a gender
+                        image_url: avatarImageUrl,
+                        image_backgroud_color: 'rgb(255,255,255)'
+                    },
+                    {
+                        headers: { 'Authorization': `Bearer ${a2eConfig.apiKey}`, 'Content-Type': 'application/json' },
+                        timeout: 60000
+                    }
+                );
+
+                if (registrationResponse.data.code === 0) {
+                    const a2eAnchorId = registrationResponse.data.data._id;
+                    avatar.metadata.a2eAnchorId = a2eAnchorId;
+                    await avatar.save();
+                    migratedCount++;
+                } else {
+                    console.warn(`Failed to migrate avatar ${avatar._id}: ${registrationResponse.data.message || JSON.stringify(registrationResponse.data)}`);
+                }
+            } catch (err) {
+                console.error(`Error migrating avatar ${avatar._id}:`, err.message);
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Migration complete. Migrated ${migratedCount} out of ${avatarsToMigrate.length} avatars.`,
+            data: {
+                totalFound: avatarsToMigrate.length,
+                migrated: migratedCount
+            }
+        });
+
+    } catch (error) {
+        console.error('Avatar migration error:', error);
+        res.status(500).json({ success: false, message: 'Avatar migration failed', error: error.message });
+    }
+};
+
+// Main async processor for image-to-avatar generation
+const processAvatarGenerationImage = async (jobId, params) => {
+  console.log('\n🚀 === ASYNC IMAGE-TO-AVATAR GENERATION START ===');
+  console.log('Job ID:', jobId);
+  console.log('Params:', JSON.stringify(params, null, 2));
+  
+  const job = await GenerationJob.findById(jobId);
+  try {
+    if (!job) {
+      console.log('❌ Job not found:', jobId);
+      return;
+    }
+    
+    await job.start();
+    await job.updateProgress(5, 'Starting avatar creation from image...');
+    
+    const { imageUrl, gender, name } = params;
+    console.log('📸 Image URL:', imageUrl);
+    console.log('👤 Gender:', gender);
+    console.log('📝 Name:', name);
+
+    // Validate image URL format
+    if (!imageUrl || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+      throw new Error(`Invalid image URL format: ${imageUrl}. Must be a valid HTTP/HTTPS URL.`);
+    }
+
+    // Step 1: Register Image as A2E Avatar to get training task
+    console.log('\n--- STEP 1: STARTING AVATAR TRAINING ---');
+    await job.updateProgress(20, 'Starting avatar training...');
+    
+    const trainingPayload = {
+      name: name || `avatar_from_img_${Date.now()}`,
+      gender: gender || 'female',
+      image_url: imageUrl,
+      image_backgroud_color: 'rgb(255,255,255)'
+    };
+    
+    console.log('📤 Training payload:', JSON.stringify(trainingPayload, null, 2));
+    console.log('🔗 Training URL:', `${A2E_VIDEO_BASE_URL}/userVideoTwin/startTraining`);
+    
+    let trainingResponse;
+    try {
+      trainingResponse = await withRetries(() => axiosA2E.post(`${A2E_VIDEO_BASE_URL}/userVideoTwin/startTraining`, trainingPayload, { 
+        headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json', 'x-lang': 'en-US' } 
+      }));
+      console.log('✅ Primary endpoint successful');
+    } catch (err) {
+      console.log('⚠️ Primary endpoint failed:', err.message);
+      if (err.response) {
+        console.log('Error status:', err.response.status);
+        console.log('Error data:', JSON.stringify(err.response.data, null, 2));
+      }
+      
+      const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
+      console.warn('🔄 Retrying A2E training using alternate base:', alt);
+      
+      trainingResponse = await withRetries(() => axiosA2E.post(`${alt}/userVideoTwin/startTraining`, trainingPayload, { 
+        headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json', 'x-lang': 'en-US' } 
+      }));
+      A2E_VIDEO_BASE_URL = alt;
+      console.log('✅ Alternate endpoint successful');
+    }
+
+    console.log('📨 Training response:', JSON.stringify(trainingResponse.data, null, 2));
+
+    if (trainingResponse.data.code !== 0) {
+      const errorMsg = `A2E avatar training start failed: ${trainingResponse.data.message || JSON.stringify(trainingResponse.data)}`;
+      console.log('❌ Training failed:', errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    const trainingTaskId = trainingResponse.data.data._id;
+    job.metadata = job.metadata || {};
+    job.metadata.a2eTrainingTaskId = trainingTaskId;
+    await job.save();
+
+    // Step 2: Poll for training completion
+    await job.updateProgress(40, 'Training avatar model...');
+    let trainingStatus = 'initialized';
+    let userVideoTwinId = null;
+    
+    for (let i = 0; i < 120; i++) { // Poll for up to 10 minutes
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      let statusResponse;
+      try {
+        statusResponse = await withRetries(() => axiosA2E.get(`${A2E_VIDEO_BASE_URL}/userVideoTwin/${trainingTaskId}`, { 
+          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+        }));
+      } catch (err) {
+        const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
+        console.warn('Retrying A2E status using alternate base:', alt);
+        statusResponse = await withRetries(() => axiosA2E.get(`${alt}/userVideoTwin/${trainingTaskId}`, { 
+          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+        }));
+        A2E_VIDEO_BASE_URL = alt;
+      }
+      
+      const statusData = statusResponse.data?.data || {};
+      trainingStatus = statusData.current_status;
+      userVideoTwinId = statusData.user_video_twin_id || statusData.video_twin_id || userVideoTwinId;
+      
+      if (trainingStatus === 'completed') break;
+      if (trainingStatus === 'failed') {
+        throw new Error(`A2E avatar training failed: ${statusData.failed_message || 'unknown error'}`);
+      }
+      
+      // Update progress based on training status
+      const progressMap = {
+        'initialized': 40,
+        'processing': 60,
+        'training': 70,
+        'generating': 80
+      };
+      const currentProgress = progressMap[trainingStatus] || 50;
+      await job.updateProgress(currentProgress, `Training status: ${trainingStatus}`);
+    }
+    
+    if (trainingStatus !== 'completed') {
+      throw new Error('A2E avatar training timed out.');
+    }
+
+    // Step 3: Get the Anchor ID
+    await job.updateProgress(90, 'Getting avatar anchor ID...');
+    const isValidObjectId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
+    const twinIdForList = isValidObjectId(userVideoTwinId) ? userVideoTwinId : (isValidObjectId(trainingTaskId) ? trainingTaskId : null);
+    
+    let a2eAnchorId = null;
+    try {
+      const url = twinIdForList
+        ? `${A2E_VIDEO_BASE_URL}/anchor/character_list?user_video_twin_id=${twinIdForList}&type=custom`
+        : `${A2E_VIDEO_BASE_URL}/anchor/character_list?type=custom`;
+      
+      let characterListResponse;
+      try {
+        characterListResponse = await withRetries(() => axiosA2E.get(url, { 
+          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+        }));
+      } catch (err) {
+        const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
+        const altUrl = url.replace(A2E_VIDEO_BASE_URL, alt);
+        console.warn('Retrying A2E anchor list using alternate base:', altUrl);
+        characterListResponse = await withRetries(() => axiosA2E.get(altUrl, { 
+          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+        }));
+        A2E_VIDEO_BASE_URL = alt;
+      }
+      
+      if (characterListResponse.data.code === 0) {
+        const list = characterListResponse.data.data?.list || [];
+        const matched = list.find(item => item.user_video_twin_id === twinIdForList || item.video_twin_id === twinIdForList);
+        a2eAnchorId = (matched && matched._id) || (list[0] && list[0]._id) || null;
+      }
+    } catch (e) {
+      console.warn('A2E anchor lookup warning:', e.response?.data || e.message);
+    }
+    
+    if (!a2eAnchorId) {
+      throw new Error('Could not retrieve anchor ID from A2E.');
+    }
+
+    // Step 4: Download the original image and create Avatar
+    await job.updateProgress(95, 'Saving avatar...');
+    const finalImageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const imageBuffer = Buffer.from(finalImageResponse.data, 'binary');
+
+    const avatar = await Avatar.create({
+      user: job.user,
+      prompt: `Avatar created from uploaded image`,
+      originalPrompt: 'Image upload',
+      imageData: imageBuffer,
+      contentType: 'image/png',
+      filename: `avatar_${Date.now()}.png`,
+      size: imageBuffer.length,
+      width: 512,
+      height: 512,
+      metadata: { 
+        provider: 'a2e', 
+        source: 'image-to-avatar', 
+        a2eAnchorId, 
+        a2eUserVideoTwinId: userVideoTwinId, 
+        a2eTrainingTaskId: trainingTaskId 
+      }
+    });
+
+    await job.complete([{ 
+      url: avatar.getAvatarUrl(), 
+      id: avatar._id, 
+      imageId: avatar._id, 
+      metadata: { a2eAnchorId, a2eUserVideoTwinId: userVideoTwinId, a2eTrainingTaskId: trainingTaskId } 
+    }]);
+    
+    console.log('Avatar from image job completed:', String(job._id));
+
+  } catch (error) {
+    console.error('Avatar generation from image process error:', { 
+      status: error.response?.status, 
+      data: error.response?.data, 
+      message: error.message 
+    });
+    if (job) await job.fail(error.message);
+  }
+};
+
+
+// @desc    Test avatar generation endpoint
+// @route   POST /api/avatars/test
+// @access  Private
+const testAvatarGeneration = async (req, res) => {
+  try {
+    console.log('\n=== AVATAR TEST ENDPOINT ===');
+    console.log('User:', req.user._id);
+    console.log('Body:', req.body);
+    
+    // Test database connection
+    console.log('Testing database connection...');
+    const testJob = await GenerationJob.create({
+      user: req.user._id,
+      type: 'test',
+      status: 'pending',
+      parameters: { test: true },
+      provider: 'test'
+    });
+    console.log('✅ Database connection works, test job ID:', testJob._id);
+    
+    // Clean up test job
+    await GenerationJob.findByIdAndDelete(testJob._id);
+    console.log('✅ Test job cleaned up');
+    
+    // Test A2E API connection
+    console.log('Testing A2E API connection...');
+    const testResponse = await axios.get(`${A2E_VIDEO_BASE_URL}/anchor/character_list?type=custom`, {
+      headers: { 'Authorization': `Bearer ${A2E_API_KEY}` },
+      timeout: 10000
+    });
+    console.log('✅ A2E API connection works, response code:', testResponse.data.code);
+    
+    res.json({
+      success: true,
+      message: 'Avatar generation system test passed',
+      data: {
+        database: 'connected',
+        a2eApi: 'connected',
+        environment: {
+          a2eApiKey: !!A2E_API_KEY,
+          a2eBaseUrl: A2E_VIDEO_BASE_URL,
+          openrouterKey: !!OPENROUTER_API_KEY
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.log('❌ Test failed:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Avatar generation system test failed',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   generateAvatar,
+  generateAvatarFromImage,
   getAvatarJob,
   getUserAvatars,
   getAvatar,
   deleteAvatar,
   serveAvatar,
-  saveImageToAvatars
+  saveImageToAvatars,
+  migrateAvatarsToA2E,
+  testAvatarGeneration
 };
+
 
 

@@ -8,7 +8,7 @@ const generationJobSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['image', 'video', 'audio', 'text'],
+    enum: ['image', 'video', 'audio', 'text', 'avatar'],
     required: [true, 'Job type is required']
   },
   status: {
@@ -169,7 +169,7 @@ const generationJobSchema = new mongoose.Schema({
   },
   provider: {
     type: String,
-    enum: ['openai', 'replicate', 'stability', 'runwayml', 'pika', 'elevenlabs', 'openrouter', 'huggingface'],
+    enum: ['openai', 'replicate', 'stability', 'runwayml', 'pika', 'elevenlabs', 'openrouter', 'huggingface', 'a2e'],
     required: true
   },
   // Retry tracking

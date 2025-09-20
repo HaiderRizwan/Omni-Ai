@@ -1,4 +1,7 @@
 const express = require('express');
+const dns = require('dns');
+// Prefer IPv4 first to avoid EAI_AGAIN DNS resolution issues on some systems
+try { dns.setDefaultResultOrder('ipv4first'); } catch (_) {}
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -54,7 +57,10 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   skip: (req) => {
     // Skip rate limiting for image serving endpoints
-    return req.path.includes('/public/') || req.path.includes('/uploads/');
+    if (req.path.includes('/public/') || req.path.includes('/uploads/')) return true;
+    // Skip status/polling endpoints used by front-end
+    if (req.path.startsWith('/api/images/job/') || req.path.startsWith('/api/avatars/job/') || req.path.startsWith('/api/videos/job/')) return true;
+    return false;
   }
 });
 

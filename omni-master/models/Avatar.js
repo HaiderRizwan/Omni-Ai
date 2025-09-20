@@ -80,7 +80,11 @@ const avatarSchema = new mongoose.Schema({
       type: String,
       default: 'avatar',
       enum: ['avatar', 'character', 'portrait']
-    }
+    },
+    source: String,
+    a2eAnchorId: String,
+    a2eUserVideoTwinId: String,
+    a2eTrainingTaskId: String
   }
 }, {
   timestamps: true

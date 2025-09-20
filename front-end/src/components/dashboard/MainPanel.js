@@ -79,6 +79,7 @@ const MainPanel = ({
                   setAvatarCollection(prev => prev.filter(item => item._id !== imageData._id));
                 }
               }})}
+              {...(activeTool === 'video' && { avatars: avatarCollection })}
             />
           </motion.div>
         )}

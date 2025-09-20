@@ -274,11 +274,48 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
     }
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     setPrompt('');
     setGeneratedImage(null);
+    setMessages([]); // Clear local messages
     if (onNewChat) {
-      onNewChat();
+      onNewChat(); // This will reset the currentChat in the parent
+    }
+
+    // Immediately create a new chat session on the backend
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const token = safeLocalStorage.getItem('token');
+      if (!token) throw new Error('Please log in to create a new chat.');
+
+      const createResponse = await fetch(`${apiBase}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: 'New Image Chat',
+          chatType: 'image'
+        })
+      });
+
+      if (createResponse.ok) {
+        const chatData = await createResponse.json();
+        if (onChatUpdate) {
+          // Update the parent component with the new chat details
+          onChatUpdate({
+            id: Date.now().toString(), // Temporary local ID
+            serverId: chatData.data._id,
+            title: chatData.data.title,
+            messages: []
+          });
+        }
+      } else {
+        console.error('Failed to create new backend chat:', createResponse.status);
+      }
+    } catch (error) {
+      console.error('Error creating new backend chat:', error);
     }
   };
 
