@@ -22,7 +22,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
   const [generatedAvatar, setGeneratedAvatar] = useState(null);
   const [messages, setMessages] = useState([]);
   const [settings, setSettings] = useState({
-    gender: 'any',
+    gender: 'female', // Default to female to match backend behavior
     age: 'adult',
     style: 'realistic',
     expression: 'neutral',
@@ -908,6 +908,26 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
           {/* Input Area */}
           <div className="p-6 border-t border-gray-800/50">
+            {/* Quick Gender Selection */}
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-sm text-gray-400">Gender:</span>
+              <div className="flex gap-2">
+                {['female', 'male', 'any'].map((gender) => (
+                  <button
+                    key={gender}
+                    onClick={() => setSettings(prev => ({ ...prev, gender }))}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
+                      settings.gender === gender
+                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                        : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+                    }`}
+                  >
+                    {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
             {generationMode === 'text' ? (
               <div className="flex gap-3">
                 <div className="flex-1 relative">

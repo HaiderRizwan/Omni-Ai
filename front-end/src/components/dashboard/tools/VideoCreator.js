@@ -14,8 +14,10 @@ const VideoCreator = ({ avatars = [] }) => {
   const [compatibleAvatars, setCompatibleAvatars] = useState([]);
 
   useEffect(() => {
-    const filtered = avatars.filter(avatar => avatar.metadata && avatar.metadata.a2eAnchorId);
+    // Filter for A2E-compatible avatars using the new isA2ECompatible flag
+    const filtered = avatars.filter(avatar => avatar.isA2ECompatible || avatar.a2eAnchorId);
     setCompatibleAvatars(filtered);
+    console.log('VideoCreator: Filtered A2E-compatible avatars:', filtered.length, 'out of', avatars.length);
   }, [avatars]);
 
   useEffect(() => {

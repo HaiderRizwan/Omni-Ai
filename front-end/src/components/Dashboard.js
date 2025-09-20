@@ -46,18 +46,24 @@ function Dashboard({ user, onLogout }) {
     safeLocalStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
-  // Function to load user's avatars
+  // Function to load user's avatars with A2E compatibility info
   const loadUserAvatars = async () => {
     try {
       const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const token = safeLocalStorage.getItem('token');
       if (!token) return;
+      // Use the enhanced endpoint that includes A2E compatibility info
       const res = await fetch(`${apiBase}/api/avatars`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) return;
       const json = await res.json();
       if (json?.success && Array.isArray(json.data.avatars)) {
+        console.log('[Dashboard] Loaded avatars with A2E compatibility:', 
+          json.data.avatars.filter(a => a.isA2ECompatible).length, 
+          'compatible out of', 
+          json.data.avatars.length, 'total'
+        );
         setAvatarCollection(json.data.avatars);
       }
     } catch (error) {

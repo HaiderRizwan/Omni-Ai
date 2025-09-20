@@ -7,6 +7,14 @@ const A2E_API_KEY = process.env.A2E_API_KEY;
 const A2E_VIDEO_BASE_URL = process.env.A2E_VIDEO_BASE_URL || 'https://video.a2e.ai/api/v1';
 const A2E_API_BASE_URL = process.env.A2E_API_BASE_URL || 'https://api.a2e.ai/api/v1';
 
+// Multiple fallback URLs for video generation
+const getVideoFallbackUrls = () => [
+  'https://video.a2e.ai/api/v1',
+  'https://video.a2e.com.cn/api/v1',
+  'https://api.a2e.ai/api/v1',
+  'https://api.avatar2everyone.com/api/v1'
+];
+
 // Helper function to get available voices
 const getDefaultVoiceId = async () => {
   try {
@@ -15,15 +23,19 @@ const getDefaultVoiceId = async () => {
     });
     
     if (response.data.code === 0 && response.data.data && response.data.data.length > 0) {
-      // Return the first available voice ID
-      return response.data.data[0].voice_id || response.data.data[0].id;
+      // Find first available voice from the nested structure
+      for (const genderGroup of response.data.data) {
+        if (genderGroup.children && genderGroup.children.length > 0) {
+          return genderGroup.children[0].value; // Return first voice ID
+        }
+      }
     }
   } catch (error) {
     console.warn('Could not fetch voice list:', error.message);
   }
   
-  // Fallback to a common voice ID format
-  return 'en-US-AriaNeural';
+  // Fallback to a common voice ID
+  return '66dc61ec5148817d26f5b79e'; // Alice voice ID from documentation
 };
 
 const generateTtsAudio = async (script, voiceId = null) => {
@@ -59,7 +71,7 @@ const processRenderJob = async (renderId) => {
   const render = await Render.findById(renderId).populate('avatar');
   try {
     if (!render) throw new Error('Render job not found');
-    
+
     console.log('Processing render job:', renderId);
     console.log('Avatar metadata:', render.avatar.metadata);
 
@@ -140,7 +152,7 @@ const pollForVideoResult = async (renderId, a2eTaskId) => {
           const fallback = await axios.get(`${A2E_VIDEO_BASE_URL}/video/task_info?task_id=${a2eTaskId}`, { 
             headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
           });
-          taskData = fallback.data.data;
+        taskData = fallback.data.data;
         } catch (e2) {
           console.warn(`Poll ${i + 1}: Both endpoints failed:`, e2.message);
           continue; // Skip this poll iteration
@@ -321,5 +333,334 @@ module.exports = {
     } catch (error) {
       return res.status(500).json({ success: false, message: 'Failed to fetch job status' });
     }
+  },
+
+  // Generate video from avatar with text using A2E API
+  generateAvatarVideo: async (req, res) => {
+    try {
+      console.log('=== AVATAR VIDEO GENERATION START ===');
+      const { avatarId, script, voiceId, title, options = {} } = req.body;
+
+      if (!avatarId || !script) {
+        return res.status(400).json({
+          success: false,
+          message: 'Avatar ID and script are required'
+        });
+      }
+
+      // Get avatar details
+      const avatar = await Avatar.findOne({ _id: avatarId, user: req.user._id });
+      if (!avatar) {
+        return res.status(404).json({
+          success: false,
+          message: 'Avatar not found'
+        });
+      }
+
+      // Check if avatar has A2E anchor ID
+      const a2eAnchorId = avatar.metadata?.a2eAnchorId;
+      if (!a2eAnchorId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Avatar is not compatible with video generation. Please create a new avatar.'
+        });
+      }
+
+      // Create video generation job
+      const video = await Video.create({
+        user: req.user._id,
+        title: title || `Video from ${avatar.originalPrompt || 'Avatar'}`,
+        script: script,
+        avatar: avatarId,
+        status: 'processing',
+        metadata: {
+          a2eAnchorId,
+          voiceId: voiceId || null,
+          options: options
+        }
+      });
+
+      console.log('Video job created:', video._id);
+
+      // Start async processing
+      setImmediate(() => processAvatarVideoGeneration(video._id));
+
+      res.status(202).json({
+        success: true,
+        message: 'Avatar video generation started',
+        data: {
+          jobId: video._id,
+          status: 'processing'
+        }
+      });
+
+    } catch (error) {
+      console.error('Avatar video generation error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to start avatar video generation',
+        error: error.message
+      });
+    }
+  },
+
+  // Get voice list for TTS options
+  getVoiceList: async (req, res) => {
+    try {
+      const { country = 'en', region = 'US', voice_map_type = 'en-US' } = req.query;
+      
+      const fallbackUrls = getVideoFallbackUrls();
+      let response = null;
+      let lastError = null;
+
+      for (const baseUrl of fallbackUrls) {
+        try {
+          response = await axios.get(`${baseUrl}/anchor/voice_list`, {
+            params: { country, region, voice_map_type },
+            headers: { 'Authorization': `Bearer ${A2E_API_KEY}` }
+          });
+          break;
+        } catch (error) {
+          console.log(`Voice list endpoint failed: ${baseUrl}`, error.message);
+          lastError = error;
+        }
+      }
+
+      if (!response) {
+        throw lastError || new Error('All voice list endpoints failed');
+      }
+
+      res.json({
+        success: true,
+        data: response.data.data || []
+      });
+
+    } catch (error) {
+      console.error('Get voice list error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch voice list',
+        error: error.message
+      });
+    }
   }
+};
+
+// Main async processor for avatar video generation
+const processAvatarVideoGeneration = async (videoId) => {
+  console.log('\n🚀 === AVATAR VIDEO GENERATION START ===');
+  console.log('Video ID:', videoId);
+
+  let video;
+  try {
+    video = await Video.findById(videoId);
+    if (!video) {
+      console.log('❌ Video job not found:', videoId);
+      return;
+    }
+
+    const { script, metadata } = video;
+    const { a2eAnchorId, voiceId, options = {} } = metadata;
+
+    console.log('📝 Script:', script);
+    console.log('🎭 Anchor ID:', a2eAnchorId);
+    console.log('🎤 Voice ID:', voiceId);
+
+    // Step 1: Generate TTS Audio
+    console.log('\n--- STEP 1: GENERATING TTS AUDIO ---');
+    const audioUrl = await generateTtsAudioAdvanced(script, voiceId);
+    console.log('✅ TTS Audio generated:', audioUrl);
+
+    // Step 2: Generate Video
+    console.log('\n--- STEP 2: GENERATING VIDEO ---');
+    const videoResult = await generateVideoWithA2E({
+      anchorId: a2eAnchorId,
+      audioSrc: audioUrl,
+      script: script,
+      title: video.title,
+      options: options
+    });
+
+    console.log('✅ Video generation started:', videoResult.taskId);
+
+    // Step 3: Poll for completion
+    console.log('\n--- STEP 3: POLLING FOR COMPLETION ---');
+    const finalVideoUrl = await pollForVideoCompletion(videoResult.taskId);
+    console.log('✅ Video generation completed:', finalVideoUrl);
+
+    // Step 4: Update video record
+    video.status = 'completed';
+    video.videoUrl = finalVideoUrl;
+    video.metadata.a2eVideoTaskId = videoResult.taskId;
+    video.metadata.audioUrl = audioUrl;
+    await video.save();
+
+    console.log('✅ Avatar video generation completed successfully!');
+
+  } catch (error) {
+    console.error('❌ Avatar video generation failed:', error);
+    if (video) {
+      video.status = 'failed';
+      video.error = error.message;
+      await video.save();
+    }
+  }
+};
+
+// Enhanced TTS generation with fallback URLs
+const generateTtsAudioAdvanced = async (script, voiceId = null) => {
+  const ttsPayload = {
+    msg: script,
+    country: 'en',
+    region: 'US',
+    speechRate: 1.0
+  };
+
+  // Add voice ID
+  if (voiceId) {
+    ttsPayload.user_voice_id = voiceId;
+  } else {
+    const defaultVoiceId = await getDefaultVoiceId();
+    ttsPayload.tts_id = defaultVoiceId;
+  }
+
+  const fallbackUrls = getVideoFallbackUrls();
+  let response = null;
+  let lastError = null;
+
+  for (const baseUrl of fallbackUrls) {
+    try {
+      response = await axios.post(`${baseUrl}/video/send_tts`, ttsPayload, {
+        headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' }
+      });
+      break;
+    } catch (error) {
+      console.log(`TTS endpoint failed: ${baseUrl}`, error.message);
+      lastError = error;
+    }
+  }
+
+  if (!response) {
+    throw lastError || new Error('All TTS endpoints failed');
+  }
+
+  if (response.data.code !== 0) {
+    throw new Error(`TTS generation failed: ${response.data.message || 'Unknown error'}`);
+  }
+
+  return response.data.data.url || response.data.data.audioSrc;
+};
+
+// Generate video using A2E API
+const generateVideoWithA2E = async ({ anchorId, audioSrc, script, title, options }) => {
+  const videoPayload = {
+    title: title || 'AI Generated Video',
+    anchor_id: anchorId,
+    anchor_type: 1, // Custom avatar
+    audioSrc: audioSrc,
+    msg: script,
+    isSkipRs: options.skipSmartMotion !== false, // Default to true for faster generation
+    isCaptionEnabled: options.enableCaptions || false,
+    resolution: options.resolution || 1080,
+    web_bg_width: options.backgroundWidth || 0,
+    web_bg_height: options.backgroundHeight || 0,
+    web_people_width: options.avatarWidth || 0,
+    web_people_height: options.avatarHeight || 0,
+    web_people_x: options.avatarX || 0,
+    web_people_y: options.avatarY || 0
+  };
+
+  // Add captions if enabled
+  if (options.enableCaptions) {
+    videoPayload.captionAlign = {
+      language: options.captionLanguage || 'en-US',
+      PrimaryColour: options.captionColor || 'rgba(255, 255, 255, 1)',
+      OutlineColour: options.captionOutlineColor || 'rgba(0, 0, 0, 1)',
+      BorderStyle: options.captionBorderStyle || 4,
+      FontName: options.captionFont || 'Arial',
+      Fontsize: options.captionSize || 50,
+      subtitle_position: options.captionPosition || 0.3
+    };
+  }
+
+  const fallbackUrls = getVideoFallbackUrls();
+  let response = null;
+  let lastError = null;
+
+  for (const baseUrl of fallbackUrls) {
+    try {
+      response = await axios.post(`${baseUrl}/video/generate`, videoPayload, {
+        headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' }
+      });
+      break;
+    } catch (error) {
+      console.log(`Video generation endpoint failed: ${baseUrl}`, error.message);
+      lastError = error;
+    }
+  }
+
+  if (!response) {
+    throw lastError || new Error('All video generation endpoints failed');
+  }
+
+  if (response.data.code !== 0) {
+    throw new Error(`Video generation failed: ${response.data.message || 'Unknown error'}`);
+  }
+
+  return {
+    taskId: response.data.data._id,
+    status: response.data.data.status
+  };
+};
+
+// Poll for video completion
+const pollForVideoCompletion = async (taskId) => {
+  const maxAttempts = 120; // 10 minutes
+  const pollInterval = 5000; // 5 seconds
+
+  for (let i = 0; i < maxAttempts; i++) {
+    console.log(`🔄 Polling attempt ${i + 1}/${maxAttempts}...`);
+    
+    try {
+      const fallbackUrls = getVideoFallbackUrls();
+      let response = null;
+
+      for (const baseUrl of fallbackUrls) {
+        try {
+          response = await axios.post(`${baseUrl}/video/awsResult`, 
+            { _id: taskId },
+            { headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' } }
+          );
+          break;
+        } catch (error) {
+          console.log(`Video status endpoint failed: ${baseUrl}`, error.message);
+        }
+      }
+
+      if (!response) {
+        console.log('⚠️ All status endpoints failed, retrying...');
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        continue;
+      }
+
+      const data = response.data.data;
+      console.log('📊 Video status:', data?.status);
+
+      if (data?.status === 'completed' || data?.status === 'succeeded') {
+        const videoUrl = data.result || data.video_url || data.url;
+        if (videoUrl) {
+          return videoUrl;
+        }
+      } else if (data?.status === 'failed') {
+        throw new Error(`Video generation failed: ${data.error || 'Unknown error'}`);
+      }
+
+    } catch (error) {
+      console.log('⚠️ Status check error:', error.message);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+  }
+
+  throw new Error('Video generation timed out');
 };

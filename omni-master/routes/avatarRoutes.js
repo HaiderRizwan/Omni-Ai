@@ -6,6 +6,7 @@ const {
   generateAvatarFromImage,
   getAvatarJob,
   getUserAvatars,
+  getA2ECompatibleAvatars,
   getAvatar,
   deleteAvatar,
   serveAvatar,
@@ -45,8 +46,13 @@ router.post('/test', protect, testAvatarGeneration);
 // @access  Private
 router.get('/job/:jobId', protect, getAvatarJob);
 
+// @route   GET /api/avatars/a2e-compatible
+// @desc    Get A2E-compatible avatars for video generation
+// @access  Private
+router.get('/a2e-compatible', protect, getA2ECompatibleAvatars);
+
 // @route   GET /api/avatars
-// @desc    Get user's avatars
+// @desc    Get user's avatars (supports ?a2eCompatible=true filter)
 // @access  Private
 router.get('/', protect, getUserAvatars);
 

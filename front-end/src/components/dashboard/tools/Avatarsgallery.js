@@ -23,6 +23,7 @@ const Gallery = () => {
   const [error, setError] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showOnlyA2ECompatible, setShowOnlyA2ECompatible] = useState(false);
 
   const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
@@ -96,7 +97,10 @@ const Gallery = () => {
     const matchesSearch = avatar.prompt?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          avatar.originalPrompt?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          avatar.characterDescription?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+    
+    const matchesA2EFilter = !showOnlyA2ECompatible || avatar.isA2ECompatible || avatar.a2eAnchorId;
+    
+    return matchesSearch && matchesA2EFilter;
   });
 
   // Sort avatars by newest first
@@ -213,6 +217,24 @@ const Gallery = () => {
           
           {/* Right Section - Controls */}
           <div className="flex items-center gap-4">
+            {/* A2E Compatible Filter */}
+            <button
+              onClick={() => setShowOnlyA2ECompatible(!showOnlyA2ECompatible)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                showOnlyA2ECompatible
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              Video Compatible
+              {showOnlyA2ECompatible && (
+                <span className="ml-1 px-2 py-0.5 bg-blue-500/30 rounded-full text-xs">
+                  ON
+                </span>
+              )}
+            </button>
+
             {/* Search */}
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-red-400 transition-colors" />
@@ -224,8 +246,6 @@ const Gallery = () => {
                 className="pl-12 pr-4 w-12 h-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 focus:bg-white/10 transition-all duration-200 backdrop-blur-sm"
               />
             </div>
-
-
           </div>
         </div>
       </div>

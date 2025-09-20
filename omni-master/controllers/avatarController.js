@@ -7,7 +7,7 @@ const http = require('http');
 const { saveBufferToUploads } = require('../utils/localUploader');
 
 // Import the working A2E image generation function from imageController
-const { generateWithA2ETextToImage } = require('./imageController');
+const { generateWithA2ETextToImage, generateWithA2ETextToImageForAvatar } = require('./imageController');
 // Simplified: remove non-A2E providers
 
 // Image generation API configurations (same as imageController)
@@ -241,7 +241,7 @@ const getAvatarJob = async (req, res) => {
 // @access  Private
 const getUserAvatars = async (req, res) => {
   try {
-    const { limit = 20, page = 1, style, gender, age } = req.query;
+    const { limit = 20, page = 1, style, gender, age, a2eCompatible } = req.query;
     const skip = (page - 1) * limit;
 
     let query = { user: req.user._id };
@@ -250,6 +250,11 @@ const getUserAvatars = async (req, res) => {
     if (style) query['characterSettings.style'] = style;
     if (gender) query['characterSettings.gender'] = gender;
     if (age) query['characterSettings.age'] = age;
+    
+    // Filter for A2E-compatible avatars (those with a2eAnchorId)
+    if (a2eCompatible === 'true') {
+      query['metadata.a2eAnchorId'] = { $exists: true, $ne: null };
+    }
 
     const avatars = await Avatar.find(query)
       .sort({ createdAt: -1 })
@@ -259,11 +264,21 @@ const getUserAvatars = async (req, res) => {
 
     const total = await Avatar.countDocuments(query);
 
-    // Add avatar URLs to each avatar
-    const avatarsWithUrls = avatars.map(avatar => ({
-      ...avatar.toObject(),
-      avatarUrl: avatar.getAvatarUrl()
-    }));
+    // Add avatar URLs and A2E compatibility info to each avatar
+    const avatarsWithUrls = avatars.map(avatar => {
+      const hasA2EAnchorId = !!(avatar.metadata?.a2eAnchorId);
+      const isExplicitlyNonCompatible = avatar.metadata?.a2eCompatible === false;
+      const isA2ECompatible = hasA2EAnchorId && !isExplicitlyNonCompatible;
+      
+      return {
+        ...avatar.toObject(),
+        avatarUrl: avatar.getAvatarUrl(),
+        isA2ECompatible: isA2ECompatible,
+        a2eAnchorId: avatar.metadata?.a2eAnchorId || null,
+        a2eUserVideoTwinId: avatar.metadata?.a2eUserVideoTwinId || null,
+        source: avatar.metadata?.source || 'unknown'
+      };
+    });
 
     res.json({
       success: true,
@@ -283,6 +298,64 @@ const getUserAvatars = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get avatars',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get A2E-compatible avatars for video generation
+// @route   GET /api/avatars/a2e-compatible
+// @access  Private
+const getA2ECompatibleAvatars = async (req, res) => {
+  try {
+    const { limit = 20, page = 1 } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Query only avatars with A2E anchor IDs
+    const query = { 
+      user: req.user._id,
+      'metadata.a2eAnchorId': { $exists: true, $ne: null }
+    };
+
+    const avatars = await Avatar.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .select('-imageData'); // Exclude image data for list view
+
+    const total = await Avatar.countDocuments(query);
+
+    // Add avatar URLs and A2E metadata
+    const avatarsWithUrls = avatars.map(avatar => ({
+      _id: avatar._id,
+      prompt: avatar.prompt,
+      originalPrompt: avatar.originalPrompt,
+      avatarUrl: avatar.getAvatarUrl(),
+      createdAt: avatar.createdAt,
+      characterSettings: avatar.characterSettings,
+      a2eAnchorId: avatar.metadata.a2eAnchorId,
+      a2eUserVideoTwinId: avatar.metadata.a2eUserVideoTwinId,
+      usedQuickAdd: avatar.metadata.usedQuickAdd || false
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        avatars: avatarsWithUrls,
+        pagination: {
+          current: parseInt(page),
+          pages: Math.ceil(total / limit),
+          total,
+          limit: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get A2E compatible avatars error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get A2E compatible avatars',
       error: error.message
     });
   }
@@ -509,10 +582,22 @@ const A2E_API_KEY = process.env.A2E_API_KEY;
 const A2E_API_BASE_URL = process.env.A2E_API_BASE_URL || 'https://api.a2e.ai/api/v1';
 let A2E_VIDEO_BASE_URL = process.env.A2E_VIDEO_BASE_URL || 'https://video.a2e.ai/api/v1';
 
+// Multiple fallback URLs for avatar training endpoints
+const getVideoFallbackUrls = () => [
+  'https://video.a2e.ai/api/v1',
+  'https://video.a2e.com.cn/api/v1',
+  'https://api.a2e.ai/api/v1',
+  'https://api.avatar2everyone.com/api/v1'
+];
+
 // Simple runtime fallback switch if DNS fails on first try
 const pickAltVideoBase = (current) => {
-  if (current.includes('video.a2e.ai')) return 'https://video.a2e.com.cn/api/v1';
-  return 'https://video.a2e.ai/api/v1';
+  const fallbacks = getVideoFallbackUrls();
+  const currentIndex = fallbacks.findIndex(url => current.includes(url.replace('/api/v1', '').replace('https://', '')));
+  if (currentIndex >= 0 && currentIndex < fallbacks.length - 1) {
+    return fallbacks[currentIndex + 1];
+  }
+  return current.includes('video.a2e.ai') ? 'https://video.a2e.com.cn/api/v1' : 'https://video.a2e.ai/api/v1';
 };
 
 // Resilient axios instance with keep-alive and retries for transient DNS/network errors
@@ -642,36 +727,46 @@ const processAvatarGenerationText = async (jobId, params) => {
         let imageBase64 = null;
         let imageUrl = null;
         
-        try {
-          // Use the exact same function from imageController
-          console.log('📡 Calling generateWithA2ETextToImage with prompt:', enhancedPrompt);
-          imageBase64 = await generateWithA2ETextToImage({ prompt: enhancedPrompt });
-          console.log('✅ Image generation completed successfully!');
-          console.log('📊 Image base64 length:', imageBase64.length);
-          
-          // Convert base64 to buffer and save as temporary file to get URL
-          console.log('💾 Converting base64 to temporary file...');
-          const base64Data = imageBase64.split(',')[1]; // Remove data:image/png;base64, prefix
-          const imageBuffer = Buffer.from(base64Data, 'base64');
-          
-          // Save to temporary storage to get a URL that A2E can access
-          const tempFileName = `temp_avatar_${Date.now()}.png`;
-          const tempImageUrl = await saveBufferToUploads(tempFileName, imageBuffer);
-          imageUrl = tempImageUrl;
-          
-          console.log('✅ Image saved to temporary storage');
-          console.log('🔗 Temporary image URL:', imageUrl);
-          
-        } catch (error) {
-          console.log('❌ Image generation failed:', error.message);
-          throw error;
-        }
+       try {
+         // Use the exact same function from imageController, but get the original A2E URL
+         console.log('📡 Calling generateWithA2ETextToImage with prompt:', enhancedPrompt);
+         const result = await generateWithA2ETextToImageForAvatar({ prompt: enhancedPrompt });
+         imageBase64 = result.base64;
+         imageUrl = result.originalUrl; // Use the original A2E URL directly
+         
+         console.log('✅ Image generation completed successfully!');
+         console.log('📊 Image base64 length:', imageBase64.length);
+         console.log('🔗 Using original A2E image URL:', imageUrl);
+         
+         // Store the text-to-image task ID for potential quickAddAvatar optimization
+         if (result.taskId) {
+           console.log('💡 Text-to-image task ID available for quickAddAvatar:', result.taskId);
+           job.metadata = job.metadata || {};
+           job.metadata.a2eTextToImageTaskId = result.taskId;
+         }
+         
+       } catch (error) {
+         console.log('❌ Image generation failed:', error.message);
+         throw error;
+       }
 
         // Step 3: Create Avatar from Generated Image
         console.log('\n--- STEP 3: CREATING AVATAR FROM GENERATED IMAGE ---');
         await job.updateProgress(50, 'Creating avatar from generated image...');
         
-        try {
+        // Skip quickAddAvatar for now since it's returning empty data
+        // Use the reliable full training process that we know works
+        let useQuickAdd = false;
+        let a2eAnchorId = null;
+        let userVideoTwinId = null;
+        let trainingTaskId = null;
+        
+        console.log('💡 QuickAddAvatar disabled - using reliable full training process');
+        
+        // Always use full training process for now
+        if (true) {
+          // Fall back to full training process
+          try {
           console.log('🎭 Starting avatar creation with generated image...');
           console.log('📸 Image URL:', imageUrl);
           
@@ -680,13 +775,17 @@ const processAvatarGenerationText = async (jobId, params) => {
             throw new Error('No image URL available for avatar creation');
           }
           
-          // Register Image as A2E Avatar to get Anchor ID
-          const trainingPayload = {
-            name: `avatar_${job.user}_${Date.now()}`,
-            gender: 'female',
-            image_url: imageUrl,
-            image_backgroud_color: 'rgb(255,255,255)'
-          };
+        // Register Image as A2E Avatar to get Anchor ID
+        const gender = job.characterSettings?.gender === 'male' ? 'male' : 'female'; // Default to female if not specified or 'any'
+        const trainingPayload = {
+          name: `avatar_${job.user}_${Date.now()}`,
+          gender: gender,
+          image_url: imageUrl,
+          video_backgroud_color: 'rgb(255,255,255)', // Corrected parameter name
+          model_version: 'V2.1' // Use latest model version
+        };
+        
+        console.log('👤 Using gender for A2E training:', gender);
           
           console.log('📤 Avatar training payload:', JSON.stringify(trainingPayload, null, 2));
           
@@ -790,14 +889,33 @@ const processAvatarGenerationText = async (jobId, params) => {
               A2E_VIDEO_BASE_URL = alt;
             }
             
-            console.log('📨 Character list response:', JSON.stringify(characterListResponse.data, null, 2));
+          console.log('📨 Character list response:', JSON.stringify(characterListResponse.data, null, 2));
+          
+          if (characterListResponse.data.code === 0) {
+            const list = characterListResponse.data.data || [];
+            console.log('📋 Character list array:', list);
+            console.log('🔍 Looking for twin ID:', twinIdForList);
             
-            if (characterListResponse.data.code === 0) {
-              const list = characterListResponse.data.data?.list || [];
-              const matched = list.find(item => item.user_video_twin_id === twinIdForList || item.video_twin_id === twinIdForList);
-              a2eAnchorId = (matched && matched._id) || (list[0] && list[0]._id) || null;
-              console.log('🎯 Found anchor ID:', a2eAnchorId);
+            // The response structure is different - data is directly an array, not data.list
+            if (Array.isArray(list) && list.length > 0) {
+              const matched = list.find(item => 
+                item.user_video_twin_id === twinIdForList || 
+                item.video_twin_id === twinIdForList ||
+                item.user_video_twin_id === userVideoTwinId
+              );
+              
+              if (matched) {
+                a2eAnchorId = matched._id;
+                console.log('✅ Found matching anchor by twin ID:', a2eAnchorId);
+              } else {
+                // If no match found, use the most recent one (first in list)
+                a2eAnchorId = list[0]._id;
+                console.log('✅ Using most recent anchor ID:', a2eAnchorId);
+              }
             }
+            
+            console.log('🎯 Final anchor ID:', a2eAnchorId);
+          }
           } catch (e) {
             console.warn('A2E anchor lookup warning:', e.response?.data || e.message);
           }
@@ -832,20 +950,63 @@ const processAvatarGenerationText = async (jobId, params) => {
             }
           });
 
-          await job.complete([{ 
-            url: avatar.getAvatarUrl(), 
-            id: avatar._id, 
-            imageId: avatar._id, 
-            metadata: { a2eAnchorId, a2eUserVideoTwinId: userVideoTwinId, a2eTrainingTaskId: trainingTaskId } 
-          }]);
-          
-          console.log('✅ Avatar creation completed successfully!');
-          console.log('🎉 Avatar ID:', avatar._id);
-          console.log('🔗 Avatar URL:', avatar.getAvatarUrl());
-          
-        } catch (avatarError) {
-          console.log('❌ Avatar creation failed:', avatarError.message);
-          throw avatarError;
+          } catch (trainingError) {
+            console.log('❌ Avatar training failed:', trainingError.message);
+            throw trainingError;
+          }
+        }
+
+        // Common avatar saving logic for both quickAdd and training paths
+        console.log('\n--- STEP 6: SAVING AVATAR ---');
+        await job.updateProgress(95, 'Saving avatar...');
+        
+        // Convert base64 to buffer for storage
+        const imageBuffer = Buffer.from(imageBase64.split(',')[1], 'base64');
+        
+        const avatar = await Avatar.create({
+          user: job.user,
+          prompt: enhancedPrompt,
+          originalPrompt: originalPrompt,
+          imageData: imageBuffer,
+          contentType: 'image/png',
+          filename: `avatar_${Date.now()}.png`,
+          size: imageBuffer.length,
+          width, 
+          height,
+          metadata: { 
+            provider: 'a2e',
+            a2eAnchorId: a2eAnchorId,
+            characterType: 'avatar',
+            source: 'text-to-avatar', 
+            a2eUserVideoTwinId: userVideoTwinId, 
+            a2eTrainingTaskId: trainingTaskId,
+            usedQuickAdd: useQuickAdd
+          }
+        });
+
+        await job.complete([{ 
+          url: avatar.getAvatarUrl(), 
+          id: avatar._id, 
+          imageId: avatar._id, 
+          metadata: { a2eAnchorId, a2eUserVideoTwinId: userVideoTwinId, a2eTrainingTaskId: trainingTaskId, usedQuickAdd: useQuickAdd } 
+        }]);
+        
+        console.log('✅ Avatar creation completed successfully!');
+        console.log('🎉 Avatar ID:', avatar._id);
+        console.log('🔗 Avatar URL:', avatar.getAvatarUrl());
+        console.log('⚡ Used quickAddAvatar:', useQuickAdd);
+        console.log('🎯 Required Metadata Fields Saved:');
+        console.log('  - provider:', 'a2e');
+        console.log('  - a2eAnchorId:', a2eAnchorId);
+        console.log('  - characterType:', 'avatar');
+        console.log('🔧 Additional A2E Metadata:');
+        console.log('  - a2eUserVideoTwinId:', userVideoTwinId);
+        console.log('  - a2eTrainingTaskId:', trainingTaskId);
+        console.log('  - A2E Compatible:', !!(a2eAnchorId));
+        
+        if (!a2eAnchorId) {
+          console.log('⚠️ WARNING: Avatar created WITHOUT A2E anchor ID!');
+          console.log('⚠️ This avatar will NOT be compatible with video generation!');
         }
 
   } catch (error) {
@@ -948,23 +1109,34 @@ const saveImageToAvatars = async (req, res) => {
         steps: image.settings?.steps,
         guidance: image.settings?.guidance
       },
-      metadata: {
-        provider: image.metadata?.provider || 'unknown',
-        generationTime: image.metadata?.generationTime || 0,
-        originalPrompt: image.prompt,
-        characterType: 'avatar',
-        originalImageId: imageId, // Track the original image ID
-        savedFromImage: true
-      }
+        metadata: {
+          provider: image.metadata?.provider || 'unknown',
+          a2eAnchorId: null,
+          characterType: 'avatar',
+          generationTime: image.metadata?.generationTime || 0,
+          originalPrompt: image.prompt,
+          source: 'saved-from-image',
+          originalImageId: imageId, // Track the original image ID
+          savedFromImage: true,
+          // Note: This avatar is NOT A2E-compatible since it wasn't trained with A2E
+          // Users need to create new avatars through the avatar generation process
+          // to get A2E-compatible avatars for video generation
+          a2eCompatible: false
+        }
     });
+
+    console.log('⚠️ Avatar saved from existing image - NOT A2E compatible');
+    console.log('🎯 Avatar ID:', avatar._id);
+    console.log('💡 To create A2E-compatible avatars, use the avatar generation process instead');
 
     res.status(201).json({
       success: true,
-      message: 'Image saved to avatars collection successfully',
+      message: 'Image saved to avatars collection successfully (Note: Not A2E-compatible for video generation)',
       data: {
         avatarId: avatar._id,
         avatarUrl: avatar.getAvatarUrl(),
-        prompt: avatar.prompt
+        prompt: avatar.prompt,
+        isA2ECompatible: false // Explicitly indicate this is not A2E compatible
       }
     });
 
@@ -1071,12 +1243,17 @@ const processAvatarGenerationImage = async (jobId, params) => {
     console.log('\n--- STEP 1: STARTING AVATAR TRAINING ---');
     await job.updateProgress(20, 'Starting avatar training...');
     
+    // Use provided gender or default based on character settings
+    const avatarGender = gender || (job.characterSettings?.gender === 'male' ? 'male' : 'female');
     const trainingPayload = {
       name: name || `avatar_from_img_${Date.now()}`,
-      gender: gender || 'female',
+      gender: avatarGender,
       image_url: imageUrl,
-      image_backgroud_color: 'rgb(255,255,255)'
+      video_backgroud_color: 'rgb(255,255,255)', // Corrected parameter name
+      model_version: 'V2.1' // Use latest model version
     };
+    
+    console.log('👤 Using gender for A2E training:', avatarGender);
     
     console.log('📤 Training payload:', JSON.stringify(trainingPayload, null, 2));
     console.log('🔗 Training URL:', `${A2E_VIDEO_BASE_URL}/userVideoTwin/startTraining`);
@@ -1216,12 +1393,13 @@ const processAvatarGenerationImage = async (jobId, params) => {
       size: imageBuffer.length,
       width: 512,
       height: 512,
-      metadata: { 
-        provider: 'a2e', 
-        source: 'image-to-avatar', 
-        a2eAnchorId, 
-        a2eUserVideoTwinId: userVideoTwinId, 
-        a2eTrainingTaskId: trainingTaskId 
+      metadata: {
+        provider: 'a2e',
+        a2eAnchorId: a2eAnchorId,
+        characterType: 'avatar',
+        source: 'image-to-avatar',
+        a2eUserVideoTwinId: userVideoTwinId,
+        a2eTrainingTaskId: trainingTaskId
       }
     });
 
@@ -1232,7 +1410,15 @@ const processAvatarGenerationImage = async (jobId, params) => {
       metadata: { a2eAnchorId, a2eUserVideoTwinId: userVideoTwinId, a2eTrainingTaskId: trainingTaskId } 
     }]);
     
-    console.log('Avatar from image job completed:', String(job._id));
+    console.log('✅ Avatar from image job completed:', String(job._id));
+    console.log('🎯 Required Metadata Fields Saved:');
+    console.log('  - provider:', 'a2e');
+    console.log('  - a2eAnchorId:', a2eAnchorId);
+    console.log('  - characterType:', 'avatar');
+    console.log('🔧 Additional A2E Metadata:');
+    console.log('  - a2eUserVideoTwinId:', userVideoTwinId);
+    console.log('  - a2eTrainingTaskId:', trainingTaskId);
+    console.log('  - A2E Compatible:', !!(a2eAnchorId));
 
   } catch (error) {
     console.error('Avatar generation from image process error:', { 
@@ -1306,6 +1492,7 @@ module.exports = {
   generateAvatarFromImage,
   getAvatarJob,
   getUserAvatars,
+  getA2ECompatibleAvatars,
   getAvatar,
   deleteAvatar,
   serveAvatar,

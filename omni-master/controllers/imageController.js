@@ -393,10 +393,23 @@ const processImageGeneration = async (jobId, params) => {
 
 // Remove non-A2E providers for simplicity
 
-// Helper function to pick alternate base URL
+// Helper function to pick alternate base URL with multiple fallbacks
 const pickAltImageBase = (current) => {
-  if (current.includes('video.a2e.ai')) return 'https://video.a2e.com.cn/api/v1';
-  return 'https://video.a2e.ai/api/v1';
+  const fallbacks = [
+    'https://video.a2e.ai/api/v1',
+    'https://video.a2e.com.cn/api/v1',
+    'https://api.a2e.ai/api/v1',
+    'https://api.avatar2everyone.com/api/v1'
+  ];
+  
+  // Find current URL and return next fallback
+  const currentIndex = fallbacks.findIndex(url => current.includes(url.replace('/api/v1', '').replace('https://', '')));
+  if (currentIndex >= 0 && currentIndex < fallbacks.length - 1) {
+    return fallbacks[currentIndex + 1];
+  }
+  
+  // Default fallback
+  return current.includes('video.a2e.ai') ? 'https://video.a2e.com.cn/api/v1' : 'https://video.a2e.ai/api/v1';
 };
 
 // Helper function with retry logic for DNS issues
@@ -420,7 +433,7 @@ const withImageRetries = async (fn, { attempts = 3, delayMs = 1500 } = {}) => {
   throw lastErr;
 };
 
-// A2E Text-to-Image integration using Nano Banana with fallback
+// A2E Text-to-Image integration using the official userText2image endpoint
 const generateWithA2ETextToImage = async (params) => {
   console.log('🎨 === A2E TEXT-TO-IMAGE START ===');
   console.log('📝 Prompt:', params.prompt);
@@ -428,39 +441,35 @@ const generateWithA2ETextToImage = async (params) => {
   let config = IMAGE_APIS.a2eTextToImage;
   console.log('🔗 Primary base URL:', config.baseUrl);
   
+  // Use default dimensions if not provided
+  const width = params.width || 1024;
+  const height = params.height || 1024;
+  
   let response;
   
-  try {
-    // Try primary endpoint with retries
-    console.log('📡 Attempting primary endpoint...');
-    response = await withImageRetries(() => axios.post(
-      `${config.baseUrl}/userNanoBanana/start`,
-      {
-        name: "Omni-AI Generated Image",
-        prompt: params.prompt
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 120000
-      }
-    ));
-    console.log('✅ Primary endpoint successful');
-  } catch (primaryError) {
-    console.log('⚠️ Primary endpoint failed:', primaryError.message);
-    
-    // Try alternate base URL
-    const altBaseUrl = pickAltImageBase(config.baseUrl);
-    console.log('🔄 Trying alternate base URL:', altBaseUrl);
+  const fallbackUrls = [
+    config.baseUrl,
+    'https://video.a2e.com.cn/api/v1',
+    'https://api.a2e.ai/api/v1',
+    'https://api.avatar2everyone.com/api/v1'
+  ];
+  
+  let lastError = null;
+  let success = false;
+  
+  for (let i = 0; i < fallbackUrls.length && !success; i++) {
+    const currentUrl = fallbackUrls[i];
+    console.log(`📡 Trying endpoint ${i + 1}/${fallbackUrls.length}: ${currentUrl}`);
     
     try {
       response = await withImageRetries(() => axios.post(
-        `${altBaseUrl}/userNanoBanana/start`,
+        `${currentUrl}/userText2image/start`,
         {
           name: "Omni-AI Generated Image",
-          prompt: params.prompt
+          prompt: params.prompt,
+          req_key: "high_aes_general_v21_L", // General style
+          width: width,
+          height: height
         },
         {
           headers: {
@@ -471,97 +480,253 @@ const generateWithA2ETextToImage = async (params) => {
         }
       ));
       
-      // Update config to use working base URL
-      config = { ...config, baseUrl: altBaseUrl };
-      console.log('✅ Alternate endpoint successful');
-    } catch (altError) {
-      console.log('❌ Both endpoints failed');
-      console.log('Primary error:', primaryError.message);
-      console.log('Alternate error:', altError.message);
-      throw new Error(`A2E API endpoints unreachable. Primary: ${primaryError.message}, Alternate: ${altError.message}`);
+      console.log(`✅ Endpoint ${i + 1} successful: ${currentUrl}`);
+      config = { ...config, baseUrl: currentUrl };
+      success = true;
+      
+    } catch (error) {
+      console.log(`⚠️ Endpoint ${i + 1} failed:`, error.message);
+      lastError = error;
+      
+      // Add delay between attempts
+      if (i < fallbackUrls.length - 1) {
+        console.log('⏳ Waiting 2 seconds before trying next endpoint...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
+  }
+  
+  if (!success) {
+    console.log('❌ All endpoints failed');
+    throw new Error(`A2E API completely unreachable. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 
   console.log('📨 Response code:', response.data.code);
   console.log('📨 Response data:', JSON.stringify(response.data, null, 2));
 
   if (response.data.code !== 0) {
-    console.error('A2E Nano Banana API Error:', response.data);
+    console.error('A2E Text-to-Image API Error:', response.data);
     throw new Error(`A2E API Error: ${response.data.message || 'Unknown error'}`);
   }
 
-  // Poll for completion
-  const taskId = response.data.data._id;
+  const responseData = response.data.data;
+  const currentStatus = responseData.current_status;
+  console.log('📊 Current status:', currentStatus);
+
+  // Check if image is already completed (synchronous response)
+  if (currentStatus === 'completed' && responseData.image_urls && responseData.image_urls.length > 0) {
+    console.log('✅ Image generation completed immediately!');
+    const imageUrl = responseData.image_urls[0];
+    console.log('🔗 Image URL:', imageUrl);
+    
+    // Fetch the image content from the URL provided by A2E
+    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
+    console.log('✅ Image downloaded and converted to base64');
+    return `data:image/png;base64,${base64}`;
+  }
+
+  // If not completed immediately, poll for completion
+  const taskId = responseData._id;
   console.log('🆔 Task ID:', taskId);
+  console.log('⏳ Image not ready immediately, starting polling...');
   
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 60; i++) { // 5 minutes total
     console.log(`🔄 Polling attempt ${i + 1}/60...`);
     await new Promise(resolve => setTimeout(resolve, 5000));
     
-    let statusResponse;
-    let statusData;
+    let statusData = null;
     
     try {
-      // First try the direct Nano Banana status endpoint
-      statusResponse = await withImageRetries(() => axios.get(
-        `${config.baseUrl}/userNanoBanana/${taskId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${config.apiKey}`
-          }
-        }
+      // Check the task status using the task ID
+      const statusResponse = await withImageRetries(() => axios.get(
+        `${config.baseUrl}/userText2image/${taskId}`,
+        { headers: { 'Authorization': `Bearer ${config.apiKey}` } }
       ));
-      statusData = statusResponse.data.data || statusResponse.data;
-      console.log(`📊 Direct status response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
-    } catch (directError) {
-      console.log(`⚠️ Direct status check failed, trying awsResult:`, directError.message);
       
-      try {
-        // Fallback to awsResult endpoint
-        statusResponse = await withImageRetries(() => axios.post(
-          `${config.baseUrl}/video/awsResult`,
-          { _id: taskId },
-          {
-            headers: {
-              'Authorization': `Bearer ${config.apiKey}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        ));
-        
-        console.log(`📊 AwsResult response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
-        
-        // Check if data is an array (empty) or actual data
-        if (Array.isArray(statusResponse.data.data) && statusResponse.data.data.length === 0) {
-          console.log(`⚠️ AwsResult returned empty array, task may still be processing`);
-          statusData = { current_status: 'processing' }; // Assume still processing
-        } else {
-          statusData = statusResponse.data.data;
-        }
-      } catch (awsError) {
-        console.log(`⚠️ Both status endpoints failed:`, awsError.message);
-        continue; // Skip this iteration
-      }
+      console.log(`📊 Status response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
+      statusData = statusResponse.data.data || statusResponse.data;
+      
+    } catch (statusError) {
+      console.log(`⚠️ Status check ${i + 1} failed:`, statusError.message);
+      continue;
     }
     
-    const currentStatus = statusData?.status || statusData?.current_status;
+    const currentStatus = statusData?.current_status;
     console.log(`📊 Current status: ${currentStatus}`);
     
     if (currentStatus === 'completed') {
-      const imageUrl = statusData.result || statusData.url || statusData.image_url;
-      
-      if (imageUrl) {
+      if (statusData.image_urls && statusData.image_urls.length > 0) {
+        const imageUrl = statusData.image_urls[0];
         console.log('✅ Image generation completed! URL:', imageUrl);
+        
         // Fetch the image content from the URL provided by A2E
         const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
         const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
         console.log('✅ Image downloaded and converted to base64');
         return `data:image/png;base64,${base64}`;
       } else {
-        throw new Error('Image generation completed but no URL returned');
+        throw new Error('Image generation completed but no image URLs returned');
       }
     } else if (currentStatus === 'failed') {
-      throw new Error(`Image generation failed: ${statusData.error || statusData.failed_message || 'unknown error'}`);
+      throw new Error(`Image generation failed: ${statusData.failed_message || 'unknown error'}`);
+    } else {
+      console.log(`⏳ Still processing... Status: ${currentStatus}`);
+    }
+  }
+  
+  throw new Error('Image generation timed out');
+};
+
+// Modified version for avatar generation that returns both base64 and original URL
+const generateWithA2ETextToImageForAvatar = async (params) => {
+  console.log('🎨 === A2E TEXT-TO-IMAGE FOR AVATAR START ===');
+  console.log('📝 Prompt:', params.prompt);
+  
+  let config = IMAGE_APIS.a2eTextToImage;
+  console.log('🔗 Primary base URL:', config.baseUrl);
+  
+  // Use default dimensions if not provided
+  const width = params.width || 1024;
+  const height = params.height || 1024;
+  
+  let response;
+  
+  const fallbackUrls = [
+    config.baseUrl,
+    'https://video.a2e.com.cn/api/v1',
+    'https://api.a2e.ai/api/v1',
+    'https://api.avatar2everyone.com/api/v1'
+  ];
+  
+  let lastError = null;
+  let success = false;
+  
+  for (let i = 0; i < fallbackUrls.length && !success; i++) {
+    const currentUrl = fallbackUrls[i];
+    console.log(`📡 Trying endpoint ${i + 1}/${fallbackUrls.length}: ${currentUrl}`);
+    
+    try {
+      response = await withImageRetries(() => axios.post(
+        `${currentUrl}/userText2image/start`,
+        {
+          name: "Omni-AI Generated Image for Avatar",
+          prompt: params.prompt,
+          req_key: "high_aes_general_v21_L", // General style
+          width: width,
+          height: height
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 120000
+        }
+      ));
+      
+      console.log(`✅ Endpoint ${i + 1} successful: ${currentUrl}`);
+      config = { ...config, baseUrl: currentUrl };
+      success = true;
+      
+    } catch (error) {
+      console.log(`⚠️ Endpoint ${i + 1} failed:`, error.message);
+      lastError = error;
+      
+      // Add delay between attempts
+      if (i < fallbackUrls.length - 1) {
+        console.log('⏳ Waiting 2 seconds before trying next endpoint...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+  }
+  
+  if (!success) {
+    console.log('❌ All endpoints failed');
+    throw new Error(`A2E API completely unreachable. Last error: ${lastError?.message || 'Unknown error'}`);
+  }
+
+  console.log('📨 Response code:', response.data.code);
+  console.log('📨 Response data:', JSON.stringify(response.data, null, 2));
+
+  if (response.data.code !== 0) {
+    console.error('A2E Text-to-Image API Error:', response.data);
+    throw new Error(`A2E API Error: ${response.data.message || 'Unknown error'}`);
+  }
+
+  const responseData = response.data.data;
+  const currentStatus = responseData.current_status;
+  console.log('📊 Current status:', currentStatus);
+
+  let originalImageUrl = null;
+
+  // Check if image is already completed (synchronous response)
+  if (currentStatus === 'completed' && responseData.image_urls && responseData.image_urls.length > 0) {
+    console.log('✅ Image generation completed immediately!');
+    originalImageUrl = responseData.image_urls[0];
+    console.log('🔗 Original A2E Image URL:', originalImageUrl);
+    
+    // Fetch the image content from the URL provided by A2E
+    const imageResponse = await axios.get(originalImageUrl, { responseType: 'arraybuffer' });
+    const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
+    console.log('✅ Image downloaded and converted to base64');
+    
+    return {
+      base64: `data:image/png;base64,${base64}`,
+      originalUrl: originalImageUrl,
+      taskId: responseData._id // Include task ID for potential quickAddAvatar
+    };
+  }
+
+  // If not completed immediately, poll for completion
+  const taskId = responseData._id;
+  console.log('🆔 Task ID:', taskId);
+  console.log('⏳ Image not ready immediately, starting polling...');
+  
+  for (let i = 0; i < 60; i++) { // 5 minutes total
+    console.log(`🔄 Polling attempt ${i + 1}/60...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    let statusData = null;
+    
+    try {
+      // Check the task status using the task ID
+      const statusResponse = await withImageRetries(() => axios.get(
+        `${config.baseUrl}/userText2image/${taskId}`,
+        { headers: { 'Authorization': `Bearer ${config.apiKey}` } }
+      ));
+      
+      console.log(`📊 Status response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
+      statusData = statusResponse.data.data || statusResponse.data;
+      
+    } catch (statusError) {
+      console.log(`⚠️ Status check ${i + 1} failed:`, statusError.message);
+      continue;
+    }
+    
+    const currentStatus = statusData?.current_status;
+    console.log(`📊 Current status: ${currentStatus}`);
+    
+    if (currentStatus === 'completed') {
+      if (statusData.image_urls && statusData.image_urls.length > 0) {
+        originalImageUrl = statusData.image_urls[0];
+        console.log('✅ Image generation completed! Original URL:', originalImageUrl);
+        
+        // Fetch the image content from the URL provided by A2E
+        const imageResponse = await axios.get(originalImageUrl, { responseType: 'arraybuffer' });
+        const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
+        console.log('✅ Image downloaded and converted to base64');
+        
+        return {
+          base64: `data:image/png;base64,${base64}`,
+          originalUrl: originalImageUrl,
+          taskId: taskId // Include task ID for potential quickAddAvatar
+        };
+      } else {
+        throw new Error('Image generation completed but no image URLs returned');
+      }
+    } else if (currentStatus === 'failed') {
+      throw new Error(`Image generation failed: ${statusData.failed_message || 'unknown error'}`);
     } else {
       console.log(`⏳ Still processing... Status: ${currentStatus}`);
     }
@@ -1203,5 +1368,6 @@ module.exports = {
   getAllImages,
   a2eImageToVideo,
   a2eImageEdit,
-  generateWithA2ETextToImage  // Export for reuse in avatar controller
+  generateWithA2ETextToImage,  // Export for reuse in avatar controller
+  generateWithA2ETextToImageForAvatar  // Export for avatar generation with original URL
 };
