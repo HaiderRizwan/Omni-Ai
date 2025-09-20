@@ -15,7 +15,8 @@ import {
   Crown,
   Bot,
   Trash,
-  Images
+  Images,
+  PlayCircle
 } from 'lucide-react';
 
 const Sidebar = ({ 
@@ -446,6 +447,19 @@ const Sidebar = ({
           >
             <User className="w-4 h-4" />
             <span className="text-sm font-medium">Avatars Gallery</span>
+          </button>
+
+          {/* Video Gallery button */}
+          <button
+            onClick={() => onToolSelect('videoGallery')}
+            className={`w-3/4 mb-3 flex items-center gap-2 p-2 rounded-lg transition-all duration-200 ${
+              activeTool === 'videoGallery'
+                ? 'text-purple-400'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <PlayCircle className="w-4 h-4" />
+            <span className="text-sm font-medium">My Videos</span>
           </button>
 
 

@@ -10,6 +10,7 @@ import APITest from './tools/APITest';
 import Gallery from './tools/Gallery';
 import ExploreGallery from './tools/exploregallery';
 import AvatarGallery from './tools/Avatarsgallery';
+import VideoGallery from './tools/VideoGallery';
 
 const MainPanel = ({ 
   activeTool, 
@@ -28,7 +29,8 @@ const MainPanel = ({
     apiTest: APITest,
     gallery: Gallery,
     explore: ExploreGallery,
-    avatarsGallery: AvatarGallery
+    avatarsGallery: AvatarGallery,
+    videoGallery: VideoGallery
   };
 
   const toolVariants = {

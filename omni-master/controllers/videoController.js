@@ -1,5 +1,6 @@
 const axios = require('axios');
 const Video = require('../models/Video');
+const AvatarVideo = require('../models/AvatarVideo'); // New model for avatar videos
 const Avatar = require('../models/Avatar');
 const Render = require('../models/Render');
 
@@ -64,7 +65,8 @@ const generateTtsAudio = async (script, voiceId = null) => {
     console.error('A2E TTS API Error:', ttsResponse.data);
     throw new Error(`A2E TTS Error: ${ttsResponse.data.message || JSON.stringify(ttsResponse.data)}`);
   }
-  return ttsResponse.data.data.audioSrc || ttsResponse.data.data.audio_src;
+  // The data field directly contains the audio URL string
+  return ttsResponse.data.data;
 };
 
 const processRenderJob = async (renderId) => {
@@ -339,13 +341,27 @@ module.exports = {
   generateAvatarVideo: async (req, res) => {
     try {
       console.log('=== AVATAR VIDEO GENERATION START ===');
+      console.log('Request body:', req.body);
+      console.log('Has file:', !!req.file);
+      
       const { avatarId, script, voiceId, title, options = {} } = req.body;
+      const audioFile = req.file; // For audio upload mode
 
       if (!avatarId || !script) {
         return res.status(400).json({
           success: false,
           message: 'Avatar ID and script are required'
         });
+      }
+
+      // Parse options if it's a string (from FormData)
+      let parsedOptions = options;
+      if (typeof options === 'string') {
+        try {
+          parsedOptions = JSON.parse(options);
+        } catch (e) {
+          parsedOptions = {};
+        }
       }
 
       // Get avatar details
@@ -366,8 +382,18 @@ module.exports = {
         });
       }
 
+      // Determine audio mode
+      const audioMode = audioFile ? 'upload' : 'tts';
+      
+      if (audioMode === 'tts' && !voiceId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voice ID is required for text-to-speech mode'
+        });
+      }
+
       // Create video generation job
-      const video = await Video.create({
+      const video = await AvatarVideo.create({
         user: req.user._id,
         title: title || `Video from ${avatar.originalPrompt || 'Avatar'}`,
         script: script,
@@ -375,15 +401,19 @@ module.exports = {
         status: 'processing',
         metadata: {
           a2eAnchorId,
+          audioMode,
           voiceId: voiceId || null,
-          options: options
+          options: parsedOptions,
+          audioFileName: audioFile?.originalname,
+          audioSize: audioFile?.size
         }
       });
 
       console.log('Video job created:', video._id);
+      console.log('Audio mode:', audioMode);
 
       // Start async processing
-      setImmediate(() => processAvatarVideoGeneration(video._id));
+      setImmediate(() => processAvatarVideoGeneration(video._id, audioFile));
 
       res.status(202).json({
         success: true,
@@ -399,6 +429,42 @@ module.exports = {
       res.status(500).json({
         success: false,
         message: 'Failed to start avatar video generation',
+        error: error.message
+      });
+    }
+  },
+
+  // Get video generation job status
+  getVideoJob: async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      const video = await AvatarVideo.findOne({ _id: jobId, user: req.user._id });
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video job not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          jobId: video._id,
+          status: video.status,
+          progress: video.progress || 0,
+          videoUrl: video.videoUrl,
+          error: video.error,
+          createdAt: video.createdAt,
+          completedAt: video.completedAt
+        }
+      });
+
+    } catch (error) {
+      console.error('Get video job error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get video job status',
         error: error.message
       });
     }
@@ -443,33 +509,124 @@ module.exports = {
         error: error.message
       });
     }
+  },
+
+  // Get user's completed videos
+  getUserVideos: async (req, res) => {
+    try {
+      const { page = 1, limit = 10, status = 'all' } = req.query;
+      
+      const filter = { user: req.user.id };
+      if (status !== 'all') {
+        filter.status = status;
+      }
+      
+      const videos = await AvatarVideo.find(filter)
+        .populate('avatar', 'name imageUrl metadata')
+        .sort({ createdAt: -1 })
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .lean();
+
+      const total = await AvatarVideo.countDocuments(filter);
+
+      res.json({
+        success: true,
+        data: {
+          videos,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / limit)
+          }
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error fetching user videos:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch videos',
+        error: error.message
+      });
+    }
+  },
+
+  // Delete a user's video
+  deleteUserVideo: async (req, res) => {
+    try {
+      const { videoId } = req.params;
+      
+      const video = await AvatarVideo.findOne({
+        _id: videoId,
+        user: req.user.id
+      });
+      
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found'
+        });
+      }
+      
+      await AvatarVideo.findByIdAndDelete(videoId);
+      
+      res.json({
+        success: true,
+        message: 'Video deleted successfully'
+      });
+    } catch (error) {
+      console.error('❌ Error deleting video:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete video',
+        error: error.message
+      });
+    }
   }
 };
 
 // Main async processor for avatar video generation
-const processAvatarVideoGeneration = async (videoId) => {
+const processAvatarVideoGeneration = async (videoId, audioFile = null) => {
   console.log('\n🚀 === AVATAR VIDEO GENERATION START ===');
   console.log('Video ID:', videoId);
+  console.log('Audio file provided:', !!audioFile);
 
   let video;
   try {
-    video = await Video.findById(videoId);
+    video = await AvatarVideo.findById(videoId);
     if (!video) {
       console.log('❌ Video job not found:', videoId);
       return;
     }
 
     const { script, metadata } = video;
-    const { a2eAnchorId, voiceId, options = {} } = metadata;
+    const { a2eAnchorId, audioMode, voiceId, options = {} } = metadata;
 
     console.log('📝 Script:', script);
     console.log('🎭 Anchor ID:', a2eAnchorId);
+    console.log('🎵 Audio Mode:', audioMode);
     console.log('🎤 Voice ID:', voiceId);
 
-    // Step 1: Generate TTS Audio
-    console.log('\n--- STEP 1: GENERATING TTS AUDIO ---');
-    const audioUrl = await generateTtsAudioAdvanced(script, voiceId);
-    console.log('✅ TTS Audio generated:', audioUrl);
+    // Step 1: Get Audio Source
+    console.log('\n--- STEP 1: GETTING AUDIO SOURCE ---');
+    let audioUrl;
+    
+    if (audioMode === 'upload' && audioFile) {
+      // Upload audio file to A2E or temporary storage
+      console.log('📤 Uploading audio file:', audioFile.originalname);
+      audioUrl = await uploadAudioToA2E(audioFile);
+      console.log('✅ Audio uploaded:', audioUrl);
+    } else {
+      // Generate TTS Audio
+      console.log('🎤 Generating TTS audio...');
+      audioUrl = await generateTtsAudioAdvanced(script, voiceId);
+      console.log('✅ TTS Audio generated:', audioUrl);
+    }
+
+    // Update progress
+    video.progress = 30;
+    await video.save();
 
     // Step 2: Generate Video
     console.log('\n--- STEP 2: GENERATING VIDEO ---');
@@ -483,16 +640,22 @@ const processAvatarVideoGeneration = async (videoId) => {
 
     console.log('✅ Video generation started:', videoResult.taskId);
 
+    // Update progress
+    video.progress = 50;
+    video.metadata.a2eVideoTaskId = videoResult.taskId;
+    video.metadata.audioUrl = audioUrl;
+    await video.save();
+
     // Step 3: Poll for completion
     console.log('\n--- STEP 3: POLLING FOR COMPLETION ---');
-    const finalVideoUrl = await pollForVideoCompletion(videoResult.taskId);
+    const finalVideoUrl = await pollForVideoCompletion(videoResult.taskId, video);
     console.log('✅ Video generation completed:', finalVideoUrl);
 
     // Step 4: Update video record
     video.status = 'completed';
     video.videoUrl = finalVideoUrl;
-    video.metadata.a2eVideoTaskId = videoResult.taskId;
-    video.metadata.audioUrl = audioUrl;
+    video.progress = 100;
+    video.completedAt = new Date();
     await video.save();
 
     console.log('✅ Avatar video generation completed successfully!');
@@ -502,6 +665,7 @@ const processAvatarVideoGeneration = async (videoId) => {
     if (video) {
       video.status = 'failed';
       video.error = error.message;
+      video.progress = 0;
       await video.save();
     }
   }
@@ -516,13 +680,15 @@ const generateTtsAudioAdvanced = async (script, voiceId = null) => {
     speechRate: 1.0
   };
 
-  // Add voice ID
+  // Add voice ID - use tts_id for public voices (from voice_list API)
   if (voiceId) {
-    ttsPayload.user_voice_id = voiceId;
+    ttsPayload.tts_id = voiceId; // Public TTS voice from /anchor/voice_list
   } else {
     const defaultVoiceId = await getDefaultVoiceId();
     ttsPayload.tts_id = defaultVoiceId;
   }
+  
+  console.log('🎤 TTS Payload:', JSON.stringify(ttsPayload, null, 2));
 
   const fallbackUrls = getVideoFallbackUrls();
   let response = null;
@@ -530,12 +696,14 @@ const generateTtsAudioAdvanced = async (script, voiceId = null) => {
 
   for (const baseUrl of fallbackUrls) {
     try {
+      console.log(`🔄 Trying TTS endpoint: ${baseUrl}/video/send_tts`);
       response = await axios.post(`${baseUrl}/video/send_tts`, ttsPayload, {
         headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' }
       });
+      console.log('✅ TTS response:', JSON.stringify(response.data, null, 2));
       break;
     } catch (error) {
-      console.log(`TTS endpoint failed: ${baseUrl}`, error.message);
+      console.log(`❌ TTS endpoint failed: ${baseUrl}`, error.response?.data || error.message);
       lastError = error;
     }
   }
@@ -548,7 +716,145 @@ const generateTtsAudioAdvanced = async (script, voiceId = null) => {
     throw new Error(`TTS generation failed: ${response.data.message || 'Unknown error'}`);
   }
 
-  return response.data.data.url || response.data.data.audioSrc;
+  // The data field directly contains the audio URL string
+  const audioUrl = response.data.data;
+  if (!audioUrl || typeof audioUrl !== 'string') {
+    throw new Error('TTS succeeded but no audio URL returned');
+  }
+
+  return audioUrl;
+};
+
+// Upload audio file for video generation
+const uploadAudioToA2E = async (audioFile) => {
+  const fs = require('fs');
+  const path = require('path');
+  
+  try {
+    // For now, save to local uploads and return URL
+    // In production, you might want to upload to A2E directly or use cloud storage
+    const uploadsDir = path.join(__dirname, '../uploads/audio');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    const fileName = `${Date.now()}_${audioFile.originalname}`;
+    const filePath = path.join(uploadsDir, fileName);
+    
+    fs.writeFileSync(filePath, audioFile.buffer);
+    
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    const audioUrl = `${baseUrl}/uploads/audio/${fileName}`;
+    
+    console.log('📁 Audio file saved locally:', audioUrl);
+    return audioUrl;
+    
+  } catch (error) {
+    console.error('❌ Audio upload failed:', error);
+    throw new Error('Failed to upload audio file');
+  }
+};
+
+// Poll for video completion with fallback URLs and progress updates
+const pollForVideoCompletion = async (taskId, video = null) => {
+  const maxAttempts = 120; // 10 minutes with 5-second intervals
+  const fallbackUrls = getVideoFallbackUrls();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    console.log(`🔄 Polling attempt ${attempt}/${maxAttempts} for task ${taskId}`);
+    
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Update progress
+    if (video) {
+      const progress = Math.min(50 + (attempt / maxAttempts) * 40, 90); // 50-90%
+      video.progress = progress;
+      await video.save();
+    }
+
+    for (const baseUrl of fallbackUrls) {
+      try {
+        // Try POST method first (more reliable based on existing code)
+        const response = await axios.post(`${baseUrl}/video/awsResult`, 
+          { _id: taskId }, 
+          { 
+            headers: { 
+              'Authorization': `Bearer ${A2E_API_KEY}`, 
+              'Content-Type': 'application/json' 
+            } 
+          }
+        );
+
+        if (response.data.code === 0) {
+          const results = response.data.data;
+          if (Array.isArray(results) && results.length > 0) {
+            const result = results[0];
+            const status = result.status || result.current_status;
+            console.log(`📊 Video task status: ${status}`);
+            console.log(`🔍 Full result object:`, JSON.stringify(result, null, 2));
+            
+            // Check for completion - A2E uses 'result' field for the video URL
+            const videoUrl = result.result || result.video_url_master || result.video_url || result.videoUrl || result.url;
+            if (videoUrl) {
+              console.log('✅ Video completed:', videoUrl);
+              return videoUrl;
+            }
+            
+            // If status is success but no video URL found, log available fields
+            if (status === 'success') {
+              console.log('⚠️ Status is success but no video URL found. Available fields:', Object.keys(result));
+            }
+            
+            // Log status progression: init → start → pending → process → copy → success
+            if (status === 'fail') {
+              throw new Error(`Video generation failed: ${result.error || 'Unknown error'}`);
+            }
+          }
+        }
+        break; // Success with this URL, don't try others
+      } catch (error) {
+        console.log(`Polling POST failed for ${baseUrl}:`, error.message);
+        
+        // Try GET method as fallback
+        try {
+          const fallbackResponse = await axios.get(`${baseUrl}/api/v1/video/awsResult?task_id=${taskId}`, {
+            headers: { 'Authorization': `Bearer ${A2E_API_KEY}` }
+          });
+          
+          if (fallbackResponse.data.code === 0) {
+            const results = fallbackResponse.data.data;
+            if (Array.isArray(results) && results.length > 0) {
+              const result = results[0];
+              const status = result.status || result.current_status;
+              console.log(`📊 Video task status (GET fallback): ${status}`);
+              console.log(`🔍 Full result object (GET fallback):`, JSON.stringify(result, null, 2));
+              
+              // Check for completion - A2E uses 'result' field for the video URL
+              const videoUrl = result.result || result.video_url_master || result.video_url || result.videoUrl || result.url;
+              if (videoUrl) {
+                console.log('✅ Video completed (GET fallback):', videoUrl);
+                return videoUrl;
+              }
+              
+              // If status is success but no video URL found, log available fields
+              if (status === 'success') {
+                console.log('⚠️ Status is success but no video URL found. Available fields:', Object.keys(result));
+              }
+              
+              if (status === 'fail') {
+                throw new Error(`Video generation failed: ${result.error || 'Unknown error'}`);
+              }
+            }
+          }
+          break; // Success with GET fallback
+        } catch (fallbackError) {
+          console.log(`Polling GET fallback also failed for ${baseUrl}:`, fallbackError.message);
+        }
+      }
+    }
+  }
+
+  throw new Error('Video generation timed out or failed');
 };
 
 // Generate video using A2E API
@@ -558,7 +864,7 @@ const generateVideoWithA2E = async ({ anchorId, audioSrc, script, title, options
     anchor_id: anchorId,
     anchor_type: 1, // Custom avatar
     audioSrc: audioSrc,
-    msg: script,
+    msg: script, // Required for captions
     isSkipRs: options.skipSmartMotion !== false, // Default to true for faster generation
     isCaptionEnabled: options.enableCaptions || false,
     resolution: options.resolution || 1080,
@@ -569,6 +875,8 @@ const generateVideoWithA2E = async ({ anchorId, audioSrc, script, title, options
     web_people_x: options.avatarX || 0,
     web_people_y: options.avatarY || 0
   };
+  
+  console.log('📹 Video generation payload:', JSON.stringify(videoPayload, null, 2));
 
   // Add captions if enabled
   if (options.enableCaptions) {
@@ -613,54 +921,4 @@ const generateVideoWithA2E = async ({ anchorId, audioSrc, script, title, options
   };
 };
 
-// Poll for video completion
-const pollForVideoCompletion = async (taskId) => {
-  const maxAttempts = 120; // 10 minutes
-  const pollInterval = 5000; // 5 seconds
 
-  for (let i = 0; i < maxAttempts; i++) {
-    console.log(`🔄 Polling attempt ${i + 1}/${maxAttempts}...`);
-    
-    try {
-      const fallbackUrls = getVideoFallbackUrls();
-      let response = null;
-
-      for (const baseUrl of fallbackUrls) {
-        try {
-          response = await axios.post(`${baseUrl}/video/awsResult`, 
-            { _id: taskId },
-            { headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json' } }
-          );
-          break;
-        } catch (error) {
-          console.log(`Video status endpoint failed: ${baseUrl}`, error.message);
-        }
-      }
-
-      if (!response) {
-        console.log('⚠️ All status endpoints failed, retrying...');
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-        continue;
-      }
-
-      const data = response.data.data;
-      console.log('📊 Video status:', data?.status);
-
-      if (data?.status === 'completed' || data?.status === 'succeeded') {
-        const videoUrl = data.result || data.video_url || data.url;
-        if (videoUrl) {
-          return videoUrl;
-        }
-      } else if (data?.status === 'failed') {
-        throw new Error(`Video generation failed: ${data.error || 'Unknown error'}`);
-      }
-
-    } catch (error) {
-      console.log('⚠️ Status check error:', error.message);
-    }
-
-    await new Promise(resolve => setTimeout(resolve, pollInterval));
-  }
-
-  throw new Error('Video generation timed out');
-};
