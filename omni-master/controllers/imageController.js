@@ -467,6 +467,7 @@ const generateWithA2ETextToImage = async (params) => {
         {
           name: "Omni-AI Generated Image",
           prompt: params.prompt,
+          negative_prompt: params.negativePrompt || '',
           req_key: "high_aes_general_v21_L", // General style
           width: width,
           height: height
@@ -612,6 +613,7 @@ const generateWithA2ETextToImageForAvatar = async (params) => {
         {
           name: "Omni-AI Generated Image for Avatar",
           prompt: params.prompt,
+          negative_prompt: params.negativePrompt || '',
           req_key: "high_aes_general_v21_L", // General style
           width: width,
           height: height

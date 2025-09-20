@@ -94,6 +94,15 @@ const generateAvatarFromText = async (req, res) => {
     // Create a detailed prompt
     const detailedPrompt = buildCharacterPrompt(prompt, characterSettings, customization);
     console.log('✅ Detailed prompt created:', detailedPrompt);
+    
+    console.log('🚫 Generating AI negative prompt...');
+    // Generate intelligent negative prompt based on the positive prompt
+    const aiGeneratedNegativePrompt = await generateNegativePromptWithLLM(detailedPrompt);
+    // If user provided additional negative prompt, append it
+    const finalNegativePrompt = negativePrompt 
+      ? `${aiGeneratedNegativePrompt}, ${negativePrompt}` 
+      : aiGeneratedNegativePrompt;
+    console.log('✅ AI-generated negative prompt created:', finalNegativePrompt);
 
     console.log('💾 Creating generation job...');
     // Create a dedicated avatar job
@@ -101,7 +110,7 @@ const generateAvatarFromText = async (req, res) => {
       user: req.user._id,
       type: 'avatar',
       status: 'pending',
-      parameters: { prompt: detailedPrompt, originalPrompt: prompt, aspectRatio, style, negativePrompt },
+      parameters: { prompt: detailedPrompt, originalPrompt: prompt, aspectRatio, style, negativePrompt: finalNegativePrompt },
       provider: 'a2e',
       metadata: { pipeline: 'text->image->avatar' }
     });
@@ -112,7 +121,7 @@ const generateAvatarFromText = async (req, res) => {
     setImmediate(async () => {
       try {
         console.log('🔄 Async process starting for job:', job._id);
-        await processAvatarGenerationText(job._id, { prompt: detailedPrompt, originalPrompt: prompt, aspectRatio, negativePrompt });
+        await processAvatarGenerationText(job._id, { prompt: detailedPrompt, originalPrompt: prompt, aspectRatio, negativePrompt: finalNegativePrompt });
         console.log('✅ Async process completed for job:', job._id);
       } catch (error) {
         console.log('❌ Async process failed for job:', job._id);
@@ -461,6 +470,32 @@ const serveAvatar = async (req, res) => {
   }
 };
 
+// Helper function to build default negative prompt for realistic avatars
+const buildDefaultNegativePrompt = () => {
+  return [
+    // Avoid artificial/fake appearance
+    'blue eyes', 'bright blue eyes', 'artificial blue eyes', 'cartoon blue eyes',
+    'plastic skin', 'smooth skin', 'perfect skin', 'doll-like skin', 'artificial skin',
+    'wax skin', 'porcelain skin', 'unrealistic skin', 'fake skin texture',
+    
+    // Avoid cartoon/anime style
+    'cartoon', 'anime', 'manga', 'cel shading', 'animated', 'illustration',
+    'drawing', 'sketch', 'painted', 'digital art', '3d render',
+    
+    // Avoid low quality
+    'blurry', 'low quality', 'low resolution', 'pixelated', 'artifacts',
+    'noise', 'distorted', 'deformed', 'ugly', 'bad anatomy',
+    
+    // Avoid multiple people or weird compositions
+    'multiple people', 'crowd', 'group', 'two people', 'duplicate',
+    'extra limbs', 'extra arms', 'extra legs', 'extra fingers',
+    
+    // Avoid weird lighting/colors
+    'oversaturated', 'neon colors', 'unnatural colors', 'weird lighting',
+    'harsh lighting', 'overexposed', 'underexposed'
+  ].join(', ');
+};
+
 // Helper function to build character-specific prompt
 const buildCharacterPrompt = (basePrompt, characterSettings, customization) => {
   let prompt = `character portrait, ${basePrompt}`;
@@ -520,8 +555,10 @@ const buildCharacterPrompt = (basePrompt, characterSettings, customization) => {
     prompt += `, ${characterSettings.background} background`;
   }
   
-  // Add character-specific keywords for better generation
-  prompt += ', detailed face, clear eyes, professional portrait, high quality, character design, single person, centered composition';
+  // Add character-specific keywords for better generation and realism
+  prompt += ', detailed face, natural skin texture, realistic skin pores, subtle skin imperfections, natural lighting';
+  prompt += ', photorealistic, high resolution, professional portrait, single person, centered composition';
+  prompt += ', natural eye color, realistic eyes, detailed facial features, skin detail, human anatomy';
   
   return prompt;
 };
@@ -570,10 +607,133 @@ const getEyeColorDescription = (color) => {
   return eyeColors[color] || 'brown';
 };
 
-// Helper function for local image upload
+// Helper function to upload image to A2E and get public URL
 const uploadImageAndGetUrl = async (file) => {
-  console.log('Uploading image:', file.originalname);
-  return await saveBufferToUploads(file.originalname, file.buffer);
+  console.log('🔄 Processing image for A2E avatar training:', file.originalname);
+  
+  try {
+    // Convert image to base64
+    const base64Image = file.buffer.toString('base64');
+    console.log('📷 Image converted to base64, length:', base64Image.length);
+    
+    // Use A2E's text-to-image API to process and host the image
+    // This will give us a publicly accessible URL that A2E can use for training
+    console.log('🚀 Uploading image to A2E text-to-image for public hosting...');
+    
+    const imageProcessingPayload = {
+      name: "Avatar Training Image",
+      prompt: "high quality portrait, realistic, detailed face, professional photo", // Minimal prompt to process the image
+      req_key: "high_aes_general_v21_L",
+      width: 1024,
+      height: 1024,
+      input_images: [base64Image] // Use the uploaded image as input
+    };
+    
+    const fallbackUrls = [
+      'https://video.a2e.ai/api/v1',
+      'https://video.a2e.com.cn/api/v1',
+      'https://api.a2e.ai/api/v1'
+    ];
+    
+    let response = null;
+    let lastError = null;
+    
+    for (const baseUrl of fallbackUrls) {
+      try {
+        console.log(`📡 Trying A2E endpoint: ${baseUrl}`);
+        response = await axios.post(
+          `${baseUrl}/userText2image/start`,
+          imageProcessingPayload,
+          {
+            headers: {
+              'Authorization': `Bearer ${A2E_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 120000
+          }
+        );
+        console.log(`✅ Successfully uploaded to: ${baseUrl}`);
+        break;
+      } catch (error) {
+        console.log(`❌ Failed to upload to ${baseUrl}:`, error.message);
+        lastError = error;
+      }
+    }
+    
+    if (!response) {
+      throw lastError || new Error('All A2E endpoints failed for image upload');
+    }
+    
+    if (response.data.code !== 0) {
+      throw new Error(`A2E image processing failed: ${response.data.message || 'Unknown error'}`);
+    }
+    
+    const taskId = response.data.data._id;
+    console.log('🎯 A2E image processing task ID:', taskId);
+    
+    // Poll for completion to get the public URL
+    console.log('⏳ Waiting for A2E to process the image...');
+    for (let i = 0; i < 60; i++) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      let statusResponse = null;
+      for (const baseUrl of fallbackUrls) {
+        try {
+          statusResponse = await axios.get(
+            `${baseUrl}/userText2image/${taskId}`,
+            {
+              headers: { 'Authorization': `Bearer ${A2E_API_KEY}` },
+              timeout: 30000
+            }
+          );
+          break;
+        } catch (error) {
+          console.log(`Status check failed for ${baseUrl}:`, error.message);
+        }
+      }
+      
+      if (!statusResponse) {
+        continue; // Try again
+      }
+      
+      const taskData = statusResponse.data.data;
+      console.log(`📊 Processing status: ${taskData.current_status}`);
+      console.log(`🔍 Full task data:`, JSON.stringify(taskData, null, 2));
+      
+      if (taskData.current_status === 'completed') {
+        // Try multiple possible URL field names
+        const possibleUrlFields = ['result_url', 'image_url', 'url', 'output_url', 'final_url', 'originalUrl'];
+        let publicUrl = null;
+        
+        for (const field of possibleUrlFields) {
+          if (taskData[field]) {
+            publicUrl = taskData[field];
+            console.log(`✅ Found image URL in field '${field}':`, publicUrl);
+            break;
+          }
+        }
+        
+        if (publicUrl) {
+          console.log('✅ Image processing completed, public URL:', publicUrl);
+          return publicUrl;
+        } else {
+          console.log('⚠️ Image processing completed but no URL found in any field');
+          console.log('Available fields:', Object.keys(taskData));
+          throw new Error('Image processing completed but no public URL found');
+        }
+      }
+      
+      if (taskData.current_status === 'failed') {
+        throw new Error(`A2E image processing failed: ${taskData.failed_message || 'Unknown error'}`);
+      }
+    }
+    
+    throw new Error('A2E image processing timed out');
+    
+  } catch (error) {
+    console.error('❌ Error processing image for A2E:', error.message);
+    throw error;
+  }
 };
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -665,6 +825,53 @@ const enhancePromptWithLLM = async (basePrompt) => {
   }
 };
 
+// Helper to generate negative prompt with LLM based on the positive prompt
+const generateNegativePromptWithLLM = async (positivePrompt) => {
+  if (!OPENROUTER_API_KEY) {
+    console.warn('OpenRouter API key not set. Using default negative prompt.');
+    return buildDefaultNegativePrompt();
+  }
+  
+  try {
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: 'openai/gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: `You are an expert at creating negative prompts for AI image generation to ensure realistic, high-quality human portraits. 
+
+Based on the positive prompt provided, generate a comprehensive negative prompt that will:
+1. Avoid unrealistic features (like bright blue eyes unless specifically requested)
+2. Prevent overly smooth, plastic-like, or artificial skin
+3. Avoid cartoon/anime style unless requested
+4. Prevent multiple people or extra limbs
+5. Avoid poor quality artifacts
+
+Always include these base negative terms: "blue eyes, bright blue eyes, plastic skin, smooth skin, perfect skin, cartoon, anime, blurry, low quality, multiple people, extra limbs"
+
+Then add specific negative terms based on the positive prompt context. Output ONLY the negative prompt terms separated by commas.` 
+          },
+          { role: 'user', content: `Positive prompt: ${positivePrompt}` }
+        ]
+      },
+      {
+        headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}` }
+      }
+    );
+    
+    const llmNegativePrompt = response.data.choices[0].message.content;
+    const defaultNegativePrompt = buildDefaultNegativePrompt();
+    
+    // Combine LLM-generated negative prompt with our defaults
+    return `${defaultNegativePrompt}, ${llmNegativePrompt}`;
+  } catch (error) {
+    console.error('Error generating negative prompt with LLM:', error.message);
+    return buildDefaultNegativePrompt(); // Fallback to default negative prompt
+  }
+};
+
 
 // Main async processor for text-to-avatar generation
 const processAvatarGenerationText = async (jobId, params) => {
@@ -708,13 +915,21 @@ const processAvatarGenerationText = async (jobId, params) => {
         console.log('- Aspect Ratio:', aspectRatio);
         console.log('- Negative Prompt:', negativePrompt);
 
-        // Step 1: Enhance Prompt
+        // Step 1: Enhance Prompt and Generate Negative Prompt
         console.log('\n--- STEP 1: PROMPT ENHANCEMENT ---');
-        await job.updateProgress(10, 'Enhancing prompt...');
+        await job.updateProgress(10, 'Enhancing prompt and generating negative prompt...');
         console.log('🧠 Enhancing prompt with LLM...');
         
         const enhancedPrompt = await enhancePromptWithLLM(originalPrompt);
         console.log('✅ Enhanced prompt:', enhancedPrompt);
+        
+        // Ensure we have a negative prompt (fallback if not provided)
+        let finalNegativePrompt = negativePrompt;
+        if (!finalNegativePrompt || finalNegativePrompt.trim() === '') {
+          console.log('🚫 No negative prompt provided, generating with LLM...');
+          finalNegativePrompt = await generateNegativePromptWithLLM(enhancedPrompt);
+          console.log('✅ Generated negative prompt:', finalNegativePrompt);
+        }
 
         const { width, height } = getDimensions(aspectRatio);
         console.log('📐 Image dimensions:', { width, height });
@@ -730,7 +945,11 @@ const processAvatarGenerationText = async (jobId, params) => {
        try {
          // Use the exact same function from imageController, but get the original A2E URL
          console.log('📡 Calling generateWithA2ETextToImage with prompt:', enhancedPrompt);
-         const result = await generateWithA2ETextToImageForAvatar({ prompt: enhancedPrompt });
+         console.log('🚫 Using negative prompt:', finalNegativePrompt);
+         const result = await generateWithA2ETextToImageForAvatar({ 
+           prompt: enhancedPrompt, 
+           negativePrompt: finalNegativePrompt 
+         });
          imageBase64 = result.base64;
          imageUrl = result.originalUrl; // Use the original A2E URL directly
          

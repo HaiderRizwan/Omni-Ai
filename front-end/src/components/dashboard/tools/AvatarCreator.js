@@ -359,13 +359,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
           onChatUpdate({ messages: newMessages, ...(title ? { title } : {}) });
         }
       } else if (generationMode === 'image') {
-        // Image-to-Avatar Logic
+        // Image-to-Avatar Logic - Much simpler than text-to-avatar!
         const formData = new FormData();
         formData.append('avatarImage', uploadedImage);
         formData.append('name', 'user_uploaded_avatar');
-        formData.append('gender', settings.gender || 'any');
+        formData.append('gender', settings.gender || 'female');
 
-        const response = await fetch(`${apiBase}/api/avatars/generate-from-image`, {
+        const startRes = await fetch(`${apiBase}/api/avatars/generate-from-image`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -373,14 +373,59 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
           body: formData
         });
 
-        const result = await response.json();
+        if (!startRes.ok) {
+          const t = await startRes.text().catch(() => '');
+          throw new Error(`Start failed: ${startRes.status}${t ? ` - ${t}` : ''}`);
+        }
 
-        if (result.success) {
-          // Handle the response - maybe start polling for the avatar task
-          console.log('Image-to-avatar task started:', result.data);
-          alert('Avatar generation from image has started. You will be notified upon completion.');
-        } else {
-          throw new Error(result.message || 'Image-to-avatar generation failed');
+        const startJson = await startRes.json();
+        const jobId = startJson?.data?.jobId;
+        if (!jobId) throw new Error('No jobId returned by server');
+
+        // Use the same polling logic as text-to-avatar
+        const poll = async () => {
+          const res = await fetch(`${apiBase}/api/avatars/job/${jobId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) {
+            const t = await res.text().catch(() => '');
+            throw new Error(`Poll failed: ${res.status}${t ? ` - ${t}` : ''}`);
+          }
+          const json = await res.json();
+          return json?.data;
+        };
+
+        const startTime = Date.now();
+        let job;
+        while (true) {
+          job = await poll();
+          if (job?.status === 'completed') break;
+          if (job?.status === 'failed') {
+            const errObj = job?.error;
+            const errMsg = (errObj && (errObj.message || errObj.code)) ? `${errObj.message || ''}${errObj.code ? ` (${errObj.code})` : ''}` : null;
+            const errDetails = errObj ? JSON.stringify(errObj) : '';
+            throw new Error(errMsg || errDetails || 'Avatar generation failed');
+          }
+          if (Date.now() - startTime > 180000) throw new Error('Avatar generation timed out');
+          await new Promise(r => setTimeout(r, 3000));
+        }
+
+        const result = Array.isArray(job?.results) ? job.results[0] : null;
+        const avatarUrl = result?.url;
+        const imageId = result?.imageId;
+        if (!avatarUrl) throw new Error('No avatar URL in job result');
+
+        setGeneratedAvatar(avatarUrl);
+
+        // Update local chat UI
+        if (onChatUpdate) {
+          const title = 'Avatar from Image';
+          const newMessages = [
+            ...(currentChat?.messages || []),
+            { type: 'user', content: 'Generated avatar from uploaded image', timestamp: Date.now() },
+            { type: 'assistant', content: `I've generated an avatar from your uploaded image.`, avatar: avatarUrl, imageId, originalPrompt: 'Image Upload', technicalPrompt: 'Image Upload', timestamp: Date.now() }
+          ];
+          onChatUpdate({ messages: newMessages, title });
         }
       }
 
