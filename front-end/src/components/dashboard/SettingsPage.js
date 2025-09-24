@@ -70,16 +70,16 @@ const SettingsPage = ({ isOpen, onClose, user }) => {
               <div className="space-y-4">
                 <SettingRow
                   label="Username"
-                  value="haiderrizwansaleemi"
+                  value={user?.username || user?.name || '—'}
                   icon={<Check className="w-4 h-4 text-green-500" />}
                 />
                 <SettingRow
                   label="Language"
-                  value="English"
+                  value={user?.language || 'English'}
                 />
                 <SettingRow
                   label="Timezone"
-                  value="UTC+5 (Pakistan Standard Time)"
+                  value={user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
                 />
               </div>
             </div>
@@ -98,12 +98,12 @@ const SettingsPage = ({ isOpen, onClose, user }) => {
               <div className="space-y-4">
                 <SettingRow
                   label="Email address"
-                  value="i222379@nu.edu.pk"
+                  value={user?.email || '—'}
                 />
                 <SettingRow
                   label="Email verified"
-                  value="Yes"
-                  icon={<Check className="w-4 h-4 text-green-500" />}
+                  value={user?.emailVerified ? 'Yes' : 'No'}
+                  icon={user?.emailVerified ? <Check className="w-4 h-4 text-green-500" /> : null}
                 />
                 <div className="pt-2">
                   <button 

@@ -2,18 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
-  Heart, 
   Share2, 
   Download, 
+  Trash2,
   Search, 
   Filter, 
   ChevronLeft,
   ChevronRight,
-  Eye,
-  Calendar,
-  User,
-  Tag,
-  ImageIcon
+  Eye
 } from 'lucide-react';
 import safeLocalStorage from '../../../utils/localStorage';
 
@@ -72,6 +68,27 @@ const Gallery = () => {
 
   const getImageUrl = (imageId) => {
     return `${apiBase}/api/avatars/public/${imageId}`;
+  };
+
+  const handleDelete = async (avatarId) => {
+    try {
+      const token = safeLocalStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`${apiBase}/api/avatars/${avatarId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        try { (window.__toast?.push || (()=>{}))({ message: `Delete failed: ${res.status}${txt ? ` - ${txt}` : ''}`, type: 'error' }); } catch(_) {}
+        return;
+      }
+      setAvatars(prev => prev.filter(a => a._id !== avatarId));
+      if (selectedAvatar?._id === avatarId) setSelectedAvatar(null);
+      try { (window.__toast?.push || (()=>{}))({ message: 'Avatar deleted', type: 'success' }); } catch(_) {}
+    } catch (e) {
+      console.error('Delete error:', e);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -374,6 +391,13 @@ const Gallery = () => {
                           >
                             <Share2 className="w-4 h-4" />
                           </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(avatar._id); }}
+                            className="w-8 h-8 bg-black/50 hover:bg-red-600/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                         
                         <div className="text-white">
@@ -431,6 +455,13 @@ const Gallery = () => {
                     title="Share"
                   >
                     <Share2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(selectedAvatar._id)}
+                    className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg text-white transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setSelectedAvatar(null)}

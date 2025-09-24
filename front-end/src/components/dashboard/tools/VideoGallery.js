@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Download, Trash2, Calendar, Clock, User, RefreshCw, AlertCircle, Video } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useToast } from '../../ToastProvider';
 
 const VideoGallery = () => {
   const [videos, setVideos] = useState([]);
@@ -12,8 +12,9 @@ const VideoGallery = () => {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [showVideoModal, setShowVideoModal] = useState(false);
 
+  const { push } = useToast();
   const token = localStorage.getItem('token');
-  const apiBase = process.env.REACT_APP_API_BASE || 'http://localhost:3001';
+  const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
   const fetchVideos = async (page = 1, status = 'all') => {
     try {
@@ -42,7 +43,7 @@ const VideoGallery = () => {
     } catch (err) {
       console.error('Error fetching videos:', err);
       setError(err.message);
-      toast.error(`Failed to load videos: ${err.message}`);
+      try { push({ message: `Failed to load videos: ${err.message}`, type: 'error' }); } catch(_) {}
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ const VideoGallery = () => {
       const result = await response.json();
       
       if (result.success) {
-        toast.success('Video deleted successfully');
+      try { push({ message: 'Video deleted successfully', type: 'success' }); } catch(_) {}
         // Refresh the current page
         fetchVideos(currentPage, filter);
       } else {
@@ -77,7 +78,7 @@ const VideoGallery = () => {
       }
     } catch (err) {
       console.error('Error deleting video:', err);
-      toast.error(`Failed to delete video: ${err.message}`);
+      try { push({ message: `Failed to delete video: ${err.message}`, type: 'error' }); } catch(_) {}
     }
   };
 
@@ -93,10 +94,10 @@ const VideoGallery = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success('Video download started');
+      try { push({ message: 'Video download started', type: 'success' }); } catch(_) {}
     } catch (err) {
       console.error('Error downloading video:', err);
-      toast.error('Failed to download video');
+      try { push({ message: 'Failed to download video', type: 'error' }); } catch(_) {}
     }
   };
 
@@ -162,26 +163,9 @@ const VideoGallery = () => {
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <Video className="w-6 h-6 text-purple-400" />
-          <h2 className="text-2xl font-bold text-white">My Videos</h2>
-        </div>
-        
-        <button
-          onClick={() => fetchVideos(currentPage, filter)}
-          disabled={loading}
-          className="flex items-center space-x-2 px-4 py-2 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 rounded-lg transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
-      </div>
-
+    <div className="p-4">
       {/* Filter Tabs */}
-      <div className="flex space-x-1 mb-6 bg-gray-800/30 p-1 rounded-lg">
+      <div className="flex space-x-1 mb-4 bg-white/5 border border-white/10 p-1 rounded-lg">
         {[
           { key: 'all', label: 'All Videos', count: pagination.total },
           { key: 'completed', label: 'Completed' },
@@ -193,8 +177,8 @@ const VideoGallery = () => {
             onClick={() => handleFilterChange(tab.key)}
             className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all ${
               filter === tab.key
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                : 'text-gray-300 hover:text-white hover:bg-white/10'
             }`}
           >
             {tab.label}
@@ -217,8 +201,8 @@ const VideoGallery = () => {
       {videos.length === 0 ? (
         <div className="text-center py-12">
           <Video className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-400 mb-2">No videos found</h3>
-          <p className="text-gray-500">
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">No videos found</h3>
+          <p className="text-gray-400">
             {filter === 'all' 
               ? "You haven't created any videos yet. Start by generating your first AI video!"
               : `No ${filter} videos found. Try a different filter.`
@@ -227,11 +211,11 @@ const VideoGallery = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {videos.map((video) => (
-              <div key={video._id} className="bg-gray-800/50 rounded-xl overflow-hidden border border-gray-700/50 hover:border-gray-600/50 transition-all group">
+              <div key={video._id} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:bg-white/10 transition-all group">
                 {/* Video Thumbnail/Preview */}
-                <div className="aspect-video bg-gray-900/50 relative overflow-hidden">
+                <div className="aspect-video bg-black/40 relative overflow-hidden">
                   {video.status === 'completed' && video.videoUrl ? (
                     <video
                       className="w-full h-full object-cover"
@@ -273,12 +257,12 @@ const VideoGallery = () => {
                 </div>
 
                 {/* Video Info */}
-                <div className="p-4">
-                  <h3 className="font-semibold text-white mb-2 truncate" title={video.title}>
+                <div className="p-3">
+                  <h3 className="font-semibold text-white mb-1 truncate" title={video.title}>
                     {video.title}
                   </h3>
                   
-                  <p className="text-sm text-gray-400 mb-3 line-clamp-2" title={video.script}>
+                  <p className="text-sm text-gray-400 mb-2 line-clamp-2" title={video.script}>
                     {video.script}
                   </p>
 
@@ -295,7 +279,7 @@ const VideoGallery = () => {
                     </div>
                     
                     {video.status === 'completed' && (
-                      <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2">
                         <Clock className="w-3 h-3" />
                         <span>{formatDuration(video.createdAt, video.completedAt)}</span>
                       </div>
@@ -304,10 +288,10 @@ const VideoGallery = () => {
 
                   {/* Action Buttons */}
                   {video.status === 'completed' && video.videoUrl && (
-                    <div className="flex space-x-2 mt-4">
+                    <div className="flex space-x-2 mt-3">
                       <button
                         onClick={() => openVideoModal(video)}
-                        className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm"
+                        className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 ui-btn-primary text-sm"
                       >
                         <Play className="w-4 h-4" />
                         <span>Play</span>
@@ -315,7 +299,7 @@ const VideoGallery = () => {
                       
                       <button
                         onClick={() => downloadVideo(video.videoUrl, video.title)}
-                        className="flex items-center justify-center px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                        className="flex items-center justify-center px-3 py-2 ui-btn"
                       >
                         <Download className="w-4 h-4" />
                       </button>
@@ -375,17 +359,7 @@ const VideoGallery = () => {
       {/* Video Modal */}
       {showVideoModal && selectedVideo && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-xl overflow-hidden max-w-4xl w-full max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white">{selectedVideo.title}</h3>
-              <button
-                onClick={closeVideoModal}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                ✕
-              </button>
-            </div>
+          <div className="bg-[#0b0b0f] border border-white/10 rounded-xl overflow-hidden max-w-4xl w-full max-h-[90vh] flex flex-col">
 
             {/* Video Player */}
             <div className="flex-1 flex items-center justify-center p-4">
@@ -400,7 +374,7 @@ const VideoGallery = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-700 flex items-center justify-between">
+            <div className="p-4 border-t border-white/10 flex items-center justify-between">
               <div className="text-sm text-gray-400">
                 <p>Created: {formatDate(selectedVideo.createdAt)}</p>
                 <p>Avatar: {selectedVideo.avatar?.name || 'Unknown'}</p>

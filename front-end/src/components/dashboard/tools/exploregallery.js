@@ -2,18 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
-  Heart, 
   Share2, 
-  Download, 
+  Download,
   Search, 
-  Filter, 
   ChevronLeft,
   ChevronRight,
-  Eye,
-  Calendar,
-  User,
-  Tag,
-  ImageIcon
+  Eye
 } from 'lucide-react';
 import safeLocalStorage from '../../../utils/localStorage';
 
@@ -72,6 +66,8 @@ const Gallery = () => {
   const getImageUrl = (imageId) => {
     return `${apiBase}/api/images/public/${imageId}`;
   };
+
+  // Note: Explore is read-only (no delete). Deletion is available in My Images gallery.
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -314,6 +310,7 @@ const Gallery = () => {
                           >
                             <Share2 className="w-4 h-4" />
                           </button>
+                          {/* No delete in Explore */}
                         </div>
                         
                         <div className="text-white">
@@ -372,6 +369,7 @@ const Gallery = () => {
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
+                  {/* No delete in Explore modal */}
                   <button
                     onClick={() => setSelectedImage(null)}
                     className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg text-white transition-colors"

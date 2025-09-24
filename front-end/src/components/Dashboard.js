@@ -278,7 +278,7 @@ function Dashboard({ user, onLogout }) {
         });
         if (!res.ok) {
           const txt = await res.text().catch(() => '');
-          alert(`Failed to delete on server: ${res.status}${txt ? ` - ${txt}` : ''}`);
+          try { (window.__toast?.push || (()=>{}))({ message: `Failed to delete on server: ${res.status}${txt ? ` - ${txt}` : ''}`, type: 'error' }); } catch(_) {}
         } else {
           // Ensure the deleted server chat is removed from serverChats state to prevent reconciliation from re-adding it locally
           setServerChats(prev => (Array.isArray(prev) ? prev.filter(c => c && c._id !== actualServerId) : prev));
@@ -298,7 +298,7 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
-  const handleNewChat = async () => {
+  const handleNewChat = async (toolId = 'chat') => {
     // Check if current chat is empty (no messages and no serverId)
     const isCurrentChatEmpty = currentChat && 
       (!currentChat.messages || currentChat.messages.length === 0) && 
@@ -309,14 +309,16 @@ function Dashboard({ user, onLogout }) {
       return currentChat;
     }
     
-    // Create a local-only chat without backend API call
+    // Create a local-only chat without backend API call under the desired tool
     // Backend chat will be created when user sends first message
-      const newChat = chatHistoryManager.addChat(activeTool, {
-        title: `New ${activeTool} Chat`,
+      const selectedTool = toolId || 'chat';
+      const newChat = chatHistoryManager.addChat(selectedTool, {
+        title: `New ${selectedTool} Chat`,
       messages: [],
       serverId: null // No server ID until first message is sent
       });
     
+      setActiveTool(selectedTool);
       setCurrentChat(newChat);
       refreshHistories();
       return newChat;

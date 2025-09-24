@@ -50,19 +50,21 @@ app.use(express.urlencoded({ extended: true }));
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Rate limiting - more lenient for image serving
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-  skip: (req) => {
-    // Skip rate limiting for image serving endpoints
-    if (req.path.includes('/public/') || req.path.includes('/uploads/')) return true;
-    // Skip status/polling endpoints used by front-end
-    if (req.path.startsWith('/api/images/job/') || req.path.startsWith('/api/avatars/job/') || req.path.startsWith('/api/videos/job/')) return true;
-    return false;
-  }
-});
+// Rate limiting (can be disabled via env)
+const limiter = process.env.DISABLE_RATE_LIMIT === 'true'
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 10000, // limit each IP to 100 requests per windowMs
+      message: 'Too many requests from this IP, please try again later.',
+      skip: (req) => {
+        // Skip rate limiting for image serving endpoints
+        if (req.path.includes('/public/') || req.path.includes('/uploads/')) return true;
+        // Skip status/polling endpoints used by front-end
+        if (req.path.startsWith('/api/images/job/') || req.path.startsWith('/api/avatars/job/') || req.path.startsWith('/api/videos/job/')) return true;
+        return false;
+      }
+    });
 
 app.use(limiter);
 

@@ -91,9 +91,9 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
           try {
             const data = JSON.parse(e.target.result);
             console.log('Imported data:', data);
-            alert('Data imported successfully!');
+            try { (window.__toast?.push || (()=>{}))({ message: 'Data imported successfully!', type: 'success' }); } catch(_) {}
           } catch (error) {
-            alert('Invalid file format');
+            try { (window.__toast?.push || (()=>{}))({ message: 'Invalid file format', type: 'error' }); } catch(_) {}
           }
         };
         reader.readAsText(file);
@@ -111,7 +111,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Link copied to clipboard!', type: 'success' }); } catch(_) {}
     }
   };
 
@@ -146,7 +146,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSearch(true)}
-                className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20"
+                className="ui-input-sm w-full pl-10 pr-4 py-2"
               />
               
               {/* Search Results Dropdown */}
@@ -161,7 +161,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
                     {searchResults.length > 0 ? (
                       searchResults.map((chat) => (
                         <div key={chat.id} className="p-3 hover:bg-gray-800/50 cursor-pointer border-b border-gray-700/50 last:border-b-0">
-                          <p className="text-sm text-white truncate">{chat.title}</p>
+                          <p className="text-sm text-white truncate" title={chat.title}>{chat.title}</p>
                           <p className="text-xs text-gray-400 mt-1">Chat • {new Date(chat.timestamp).toLocaleDateString()}</p>
                         </div>
                       ))
@@ -179,7 +179,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
             {/* Mobile Search Button */}
             <button
               onClick={() => setShowSearch(true)}
-              className="lg:hidden rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white"
+              className="lg:hidden ui-icon-btn"
             >
               <Search size={20} />
             </button>
@@ -188,7 +188,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white"
+                className="relative ui-icon-btn"
               >
                 <Bell size={20} />
                 {notifications.length > 0 && (
@@ -248,7 +248,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
             {/* Help */}
             <button
               onClick={() => setShowHelp(true)}
-              className="rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white"
+              className="ui-icon-btn"
             >
               <HelpCircle size={20} />
             </button>
@@ -256,7 +256,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
             {/* Theme Toggle */}
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
-              className="rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white"
+              className="ui-icon-btn"
             >
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
@@ -265,7 +265,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
             <div className="relative">
               <button
                 onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                className="flex items-center gap-2 rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white"
+                className="flex items-center gap-2 ui-icon-btn"
               >
                 <div className="w-8 h-8 rounded-full bg-gradient-to-r from-red-500 to-rose-500 flex items-center justify-center">
                   <User size={16} />
@@ -357,7 +357,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
             {/* Mobile Menu */}
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="lg:hidden rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white"
+              className="lg:hidden ui-icon-btn"
             >
               {showMobileMenu ? <CloseIcon size={20} /> : <Menu size={20} />}
             </button>
@@ -514,7 +514,7 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect }) => {
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {searchResults.map((chat) => (
                     <div key={chat.id} className="p-3 hover:bg-gray-800/50 rounded-lg cursor-pointer">
-                      <p className="text-sm text-white truncate">{chat.title}</p>
+                      <p className="text-sm text-white truncate" title={chat.title}>{chat.title}</p>
                       <p className="text-xs text-gray-400 mt-1">Chat • {new Date(chat.timestamp).toLocaleDateString()}</p>
                     </div>
                   ))}

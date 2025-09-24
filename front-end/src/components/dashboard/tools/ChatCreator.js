@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import FormattedMessage from '../ui/FormattedMessage';
 import { motion } from 'framer-motion';
-import { Send, Bot, User, Loader2, Paperclip, X } from 'lucide-react';
+import { Send, Bot, User, Loader2, Paperclip, X, RefreshCcw, Copy } from 'lucide-react';
 import safeLocalStorage from '../../../utils/localStorage';
 
 const ChatCreator = ({ currentChat, onChatUpdate }) => {
@@ -10,10 +10,17 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const inputRef = useRef(null);
   const [pendingAttachment, setPendingAttachment] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
   const [attachmentData, setAttachmentData] = useState(null);
   const currentServerChatId = useRef(null); // Store serverId locally
+  const quickPrompts = [
+    'Summarize this conversation in 3 bullet points',
+    'Brainstorm 5 ideas based on my last message',
+    'Explain this like I am 10 years old',
+    'Create an action plan with next steps'
+  ];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -266,20 +273,34 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
     }
   };
 
+  // Auto-resize textarea like GPT up to a max height, then scroll
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const max = 160; // ~10 lines
+    const newH = Math.min(el.scrollHeight, max);
+    el.style.height = newH + 'px';
+    el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
+  }, [inputMessage]);
+
+  const copyMessageToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text || '');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Copied to clipboard', type: 'success' }); } catch(_) {}
+    } catch (_) {}
+  };
+
+  const regenerateFromLastUser = () => {
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    if (!lastUser || isLoading) return;
+    setInputMessage(lastUser.content || '');
+    setTimeout(() => sendMessage(), 0);
+  };
+
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-800/50">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gradient-to-r from-red-600 to-red-800">
-            <Bot className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">OMNI AI Chat</h1>
-            <p className="text-gray-400">Chat with our AI assistant</p>
-          </div>
-        </div>
-      </div>
+      {/* Header removed per request */}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto themed-scrollbar p-6 space-y-4 min-h-0 pb-40">
@@ -288,7 +309,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             key={message.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`group flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             {message.role === 'assistant' && (
               <div className="p-2 rounded-lg bg-gradient-to-r from-red-600 to-red-800">
@@ -296,10 +317,10 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
               </div>
             )}
             
-            <div className={`max-w-[70%] p-4 rounded-xl ${
+            <div className={`relative max-w-[70%] p-4 rounded-2xl ${
               message.role === 'user' 
                 ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' 
-                : 'bg-gray-800/50 text-gray-100'
+                : 'bg-white/5 border border-white/10 text-gray-100'
             }`}>
               {message.role === 'assistant' ? (
                 message.image ? (
@@ -366,6 +387,27 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
               }`}>
                 {message.timestamp.toLocaleTimeString()}
               </p>
+
+              {message.role === 'assistant' && !message.image && (
+                <div className="absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 transition">
+                  <div className="ui-card px-2 py-1 flex gap-1">
+                    <button
+                      className="ui-icon-btn"
+                      title="Copy"
+                      onClick={() => copyMessageToClipboard(message.content)}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="ui-icon-btn"
+                      title="Regenerate"
+                      onClick={regenerateFromLastUser}
+                    >
+                      <RefreshCcw className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {message.role === 'user' && (
@@ -385,10 +427,14 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             <div className="p-2 rounded-lg bg-gradient-to-r from-red-600 to-red-800">
               <Bot className="w-5 h-5 text-white" />
             </div>
-            <div className="bg-gray-800/50 p-4 rounded-xl">
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                <span className="text-sm text-gray-400">AI is thinking...</span>
+            <div className="ui-card px-4 py-3">
+              <div className="flex items-center gap-2 text-gray-300">
+                <span className="relative inline-flex gap-1 items-center">
+                  <span className="w-2 h-2 rounded-full bg-white/70 animate-pulse"></span>
+                  <span className="w-2 h-2 rounded-full bg-white/50 animate-pulse" style={{ animationDelay: '100ms' }}></span>
+                  <span className="w-2 h-2 rounded-full bg-white/30 animate-pulse" style={{ animationDelay: '200ms' }}></span>
+                </span>
+                <span className="text-sm">Thinking…</span>
               </div>
             </div>
           </motion.div>
@@ -399,7 +445,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
 
       {/* Debug Box */}
       {debugInfo && (
-        <div className="fixed bottom-32 left-80 right-0 z-30 p-4">
+        <div className="fixed bottom-32 right-0 z-30 p-4" style={{ left: 'var(--sidebar-w, 16rem)' }}>
           <div className={`p-4 rounded-lg border text-sm max-w-md ${
             debugInfo.status === 'converted' 
               ? 'bg-green-900/20 border-green-500/50 text-green-300'
@@ -427,8 +473,16 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
         </div>
       )}
 
-      {/* Input */}
-      <div className="p-6 border-t border-gray-800/50 shrink-0 fixed bottom-0 left-80 right-0 z-40 bg-[#0b0b0f]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0b0b0f]/70">
+      {/* Composer */}
+      <div className="p-6 border-t border-gray-800/50 shrink-0 fixed bottom-0 right-0 z-40 bg-[#0b0b0f]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0b0b0f]/70" style={{ left: 'var(--sidebar-w, 16rem)' }}>
+        {/* Quick prompts */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {quickPrompts.map((p, i) => (
+            <button key={i} className="ui-btn text-sm" onClick={() => setInputMessage(p)} title="Insert prompt">
+              {p}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-3 items-center">
           {/* Attach */}
           <div>
@@ -524,7 +578,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="p-3 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 transition"
+              className="ui-btn"
               disabled={isLoading}
               title="Attach a document"
             >
@@ -533,19 +587,20 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
           </div>
 
           <div className="flex-1 relative">
-            <input
-              type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-            placeholder="Type your message here..."
-              className="w-full p-4 pr-12 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20"
-            disabled={isLoading}
-          />
+              placeholder="Message Omni…  (Enter to send, Shift+Enter for newline)"
+              className="ui-input p-4 pr-12 resize-none max-h-40"
+              disabled={isLoading}
+            />
           <button
             onClick={sendMessage}
               disabled={(!inputMessage.trim() && !pendingAttachment) || isLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="absolute right-2 top-1/2 -translate-y-1/2 ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -556,7 +611,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
           </div>
 
           {pendingAttachment && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white/80">
+            <div className="flex items-center gap-2 px-3 py-2 ui-card text-sm text-white/80">
               <span className="max-w-[220px] truncate">{pendingAttachment.name}</span>
               <button
                 onClick={() => { 
@@ -565,7 +620,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
                   setDebugInfo(null);
                   if (fileInputRef.current) fileInputRef.current.value = ''; 
                 }}
-                className="p-1 rounded hover:bg-white/10"
+                className="ui-icon-btn"
                 title="Remove attachment"
               >
                 <X className="w-4 h-4" />

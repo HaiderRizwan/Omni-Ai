@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import safeLocalStorage from '../../../utils/localStorage';
+import { Trash2 } from 'lucide-react';
 
 const ImageGallery = () => {
   const [images, setImages] = useState([]);
@@ -77,6 +78,27 @@ const ImageGallery = () => {
     const url = `${apiBase}/api/images/public/${id}`;
     console.log('🔗 Generated image URL:', url);
     return url;
+  };
+
+  const deleteImage = async (id) => {
+    try {
+      const token = safeLocalStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`${apiBase}/api/images/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        try { (window.__toast?.push || (()=>{}))({ message: `Delete failed: ${res.status}${txt ? ` - ${txt}` : ''}`, type: 'error' }); } catch(_) {}
+        return;
+      }
+      setImages(prev => prev.filter(img => img._id !== id));
+      if (selectedImage?._id === id) setSelectedImage(null);
+      try { (window.__toast?.push || (()=>{}))({ message: 'Image deleted', type: 'success' }); } catch(_) {}
+    } catch (e) {
+      console.error('Delete error:', e);
+    }
   };
 
   const formatDate = (dateString) =>
@@ -254,6 +276,13 @@ const ImageGallery = () => {
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                       </svg>
+                    </button>
+                    <button 
+                      className="w-8 h-8 bg-black/50 hover:bg-red-600/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                      title="Delete"
+                      onClick={(e) => { e.stopPropagation(); deleteImage(image._id); }}
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                   

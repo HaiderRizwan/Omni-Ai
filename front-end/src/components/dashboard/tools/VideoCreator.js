@@ -88,7 +88,7 @@ const VideoCreator = ({ avatars = [] }) => {
             clearInterval(interval);
           }
           if (result.data.status === 'failed') {
-            alert(`Video generation failed: ${result.data.error || 'Unknown error'}`);
+            try { (window.__toast?.push || (()=>{}))({ message: `Video generation failed: ${result.data.error || 'Unknown error'}`, type: 'error' }); } catch(_) {}
             clearInterval(interval);
           }
         }
@@ -99,17 +99,17 @@ const VideoCreator = ({ avatars = [] }) => {
 
   const handleGenerate = async () => {
     if (!selectedAvatar || !script.trim()) {
-      alert('Please select an avatar and enter a script.');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Please select an avatar and enter a script.', type: 'warning' }); } catch(_) {}
       return;
     }
     
     if (audioMode === 'tts' && !selectedVoice) {
-      alert('Please select a voice for text-to-speech.');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Please select a voice for text-to-speech.', type: 'warning' }); } catch(_) {}
       return;
     }
     
     if (audioMode === 'upload' && !uploadedAudio) {
-      alert('Please upload an audio file.');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Please upload an audio file.', type: 'warning' }); } catch(_) {}
       return;
     }
     
@@ -170,7 +170,7 @@ const VideoCreator = ({ avatars = [] }) => {
       }
     } catch (error) {
       console.error('Video generation error:', error);
-      alert(`Error: ${error.message}`);
+      try { (window.__toast?.push || (()=>{}))({ message: `Error: ${error.message}`, type: 'error' }); } catch(_) {}
       setJobStatus(null);
     } finally {
       setIsGenerating(false);
@@ -178,19 +178,7 @@ const VideoCreator = ({ avatars = [] }) => {
   };
   
   return (
-    <div className="h-full flex flex-col p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500">
-            <Film className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">AI Video Creator</h1>
-            <p className="text-gray-400">Create videos with AI avatars and voices</p>
-          </div>
-        </div>
-      </div>
+    <div className="h-full flex flex-col p-4">
 
       <div className="flex-1 overflow-y-auto space-y-6">
         {/* Avatar Selection */}
@@ -200,30 +188,30 @@ const VideoCreator = ({ avatars = [] }) => {
             Select an Avatar
           </h3>
           {compatibleAvatars.length > 0 ? (
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {compatibleAvatars.map(avatar => (
-                <div
+                <button
                   key={avatar._id}
                   onClick={() => setSelectedAvatar(avatar._id)}
-                  className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedAvatar === avatar._id 
-                      ? 'border-blue-500 ring-2 ring-blue-500/20' 
-                      : 'border-gray-600 hover:border-gray-500'
-                  }`}
+                  className={`group text-left bg-white/5 border ${selectedAvatar === avatar._id ? 'border-red-500 ring-2 ring-red-500/20' : 'border-white/10 hover:border-white/20'} rounded-xl overflow-hidden transition-all`}
+                  title={avatar.prompt}
                 >
-                  <img
-                    src={avatar.avatarUrl}
-                    alt={avatar.prompt}
-                    className="w-full h-20 object-cover"
-                  />
-                  {selectedAvatar === avatar._id && (
-                    <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                        <User className="w-4 h-4 text-white" />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  <div className="relative">
+                    <img
+                      src={avatar.avatarUrl}
+                      alt={avatar.prompt}
+                      className="w-full h-28 object-cover"
+                    />
+                    {selectedAvatar === avatar._id && (
+                      <div className="absolute inset-0 bg-red-500/10" />
+                    )}
+                  </div>
+                  <div className="p-2 border-t border-white/10">
+                    <p className="text-xs text-gray-200 truncate" title={avatar.prompt}>
+                      {avatar.prompt || 'Untitled avatar'}
+                    </p>
+                  </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -240,10 +228,21 @@ const VideoCreator = ({ avatars = [] }) => {
           <h3 className="text-lg font-semibold text-white mb-3">Script</h3>
           <textarea
             value={script}
-            onChange={(e) => setScript(e.target.value)}
+            onChange={(e) => {
+              setScript(e.target.value);
+              const el = e.target;
+              el.style.height = 'auto';
+              el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleGenerate();
+              }
+            }}
             placeholder="Enter what you want your avatar to say..."
-            className="w-full p-4 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 resize-none"
-            rows="4"
+            className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 resize-none max-h-40"
+            rows="3"
           />
         </div>
 
@@ -260,8 +259,8 @@ const VideoCreator = ({ avatars = [] }) => {
               onClick={() => setAudioMode('tts')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                 audioMode === 'tts'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
               }`}
             >
               <Mic className="w-4 h-4" />
@@ -271,8 +270,8 @@ const VideoCreator = ({ avatars = [] }) => {
               onClick={() => setAudioMode('upload')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                 audioMode === 'upload'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
               }`}
             >
               <FileAudio className="w-4 h-4" />
@@ -294,7 +293,7 @@ const VideoCreator = ({ avatars = [] }) => {
                   <select
                     value={selectedVoice || ''}
                     onChange={(e) => setSelectedVoice(e.target.value)}
-                    className="w-full p-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-blue-500/50"
+                  className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-red-500/50"
                   >
                     <option value="">Choose a voice...</option>
                     {availableVoices.map(group => (
@@ -321,7 +320,7 @@ const VideoCreator = ({ avatars = [] }) => {
                   type="file"
                   accept="audio/*"
                   onChange={(e) => setUploadedAudio(e.target.files[0])}
-                  className="w-full p-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-500 file:text-white hover:file:bg-blue-600"
+                  className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-red-500 file:text-white hover:file:bg-red-600"
                 />
               </div>
               {uploadedAudio && (
@@ -342,7 +341,7 @@ const VideoCreator = ({ avatars = [] }) => {
             </h3>
             <button
               onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              className="text-sm text-red-400 hover:text-red-300 transition-colors"
             >
               {showAdvancedOptions ? 'Hide Advanced' : 'Show Advanced'}
             </button>
@@ -378,14 +377,14 @@ const VideoCreator = ({ avatars = [] }) => {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="mt-4 space-y-4 p-4 rounded-lg bg-gray-800/30"
+              className="mt-4 space-y-4 p-4 rounded-lg bg-white/5 border border-white/10"
             >
               <div>
                 <label className="text-sm text-gray-400 mb-2 block">Resolution</label>
                 <select
                   value={videoOptions.resolution}
                   onChange={(e) => setVideoOptions(prev => ({ ...prev, resolution: parseInt(e.target.value) }))}
-                  className="w-full p-2 rounded-lg bg-gray-700/50 border border-gray-600 text-white"
+                  className="w-full p-2 rounded-lg bg-black/30 border border-white/10 text-white"
                 >
                   <option value={720}>720p (HD)</option>
                   <option value={1080}>1080p (Full HD)</option>
@@ -411,7 +410,7 @@ const VideoCreator = ({ avatars = [] }) => {
                           ...prev,
                           captionOptions: { ...prev.captionOptions, fontSize: parseInt(e.target.value) }
                         }))}
-                        className="w-full p-2 rounded-lg bg-gray-700/50 border border-gray-600 text-white"
+                        className="w-full p-2 rounded-lg bg-black/30 border border-white/10 text-white"
                       />
                     </div>
                     
@@ -423,7 +422,7 @@ const VideoCreator = ({ avatars = [] }) => {
                           ...prev,
                           captionOptions: { ...prev.captionOptions, position: parseFloat(e.target.value) }
                         }))}
-                        className="w-full p-2 rounded-lg bg-gray-700/50 border border-gray-600 text-white"
+                        className="w-full p-2 rounded-lg bg-black/30 border border-white/10 text-white"
                       >
                         <option value={0.1}>Top</option>
                         <option value={0.3}>Upper Middle</option>
@@ -443,7 +442,7 @@ const VideoCreator = ({ avatars = [] }) => {
         <button
           onClick={handleGenerate}
           disabled={isGenerating || !selectedAvatar || !script.trim()}
-          className="w-full p-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 text-lg font-medium"
+          className="w-full p-4 rounded-2xl bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 text-lg font-medium"
         >
           {isGenerating ? (
             <>
@@ -500,7 +499,7 @@ const VideoCreator = ({ avatars = [] }) => {
                   setJobStatus(null);
                   setJobId(null);
                 }}
-                className="px-6 py-3 rounded-lg bg-gray-600 hover:bg-gray-700 text-white font-medium transition-colors"
+                className="px-6 py-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-white font-medium transition-colors"
               >
                 Create Another
               </button>

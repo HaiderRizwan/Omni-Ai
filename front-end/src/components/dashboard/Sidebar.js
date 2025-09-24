@@ -16,7 +16,12 @@ import {
   Bot,
   Trash,
   Images,
-  PlayCircle
+  PlayCircle,
+  Search,
+  BookOpen,
+  DollarSign,
+  Compass,
+  PanelLeftClose
 } from 'lucide-react';
 
 const Sidebar = ({ 
@@ -31,6 +36,12 @@ const Sidebar = ({
   onUserUpdate
 }) => {
   const { theme, isDark, isRed } = useTheme();
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      const v = safeLocalStorage.getItem('sidebarCollapsed');
+      return v === 'true';
+    } catch (_) { return false; }
+  });
   const [subscriptionStatus, setSubscriptionStatus] = useState('free'); // 'free', 'trial', 'active'
   const [isCheckingSubscription, setIsCheckingSubscription] = useState(false);
 
@@ -91,6 +102,27 @@ const Sidebar = ({
     }
   };
 
+  // Sync CSS variable for sidebar width
+  useEffect(() => {
+    const width = isCollapsed ? '4rem' : '16rem';
+    try { document.documentElement.style.setProperty('--sidebar-w', width); } catch (_) {}
+  }, [isCollapsed]);
+
+  // Keyboard shortcut: Ctrl/Cmd + B to toggle collapse
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (isCtrlOrCmd && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        const next = !isCollapsed;
+        setIsCollapsed(next);
+        try { safeLocalStorage.setItem('sidebarCollapsed', String(next)); } catch (_) {}
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isCollapsed]);
+
   // Check subscription status on component mount
   useEffect(() => {
     checkSubscriptionStatus();
@@ -101,7 +133,7 @@ const Sidebar = ({
       const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const token = safeLocalStorage.getItem('token');
       if (!token) {
-        alert('Please log in first.');
+        try { (window.__toast?.push || (()=>{}))({ message: 'Please log in first.', type: 'warning' }); } catch(_) {}
         return;
       }
 
@@ -111,7 +143,7 @@ const Sidebar = ({
       });
       const profJson = await profRes.json().catch(() => ({}));
       if (!profRes.ok) {
-        alert('Authentication invalid. Please log in again.');
+        try { (window.__toast?.push || (()=>{}))({ message: 'Authentication invalid. Please log in again.', type: 'error' }); } catch(_) {}
         return;
       }
 
@@ -154,7 +186,7 @@ const Sidebar = ({
         if (onUserUpdate && user) {
           onUserUpdate({ ...user, subscriptionStatus: 'trial' });
         }
-        alert('Trial started successfully!');
+        try { (window.__toast?.push || (()=>{}))({ message: 'Trial started successfully!', type: 'success' }); } catch(_) {}
         return;
       }
 
@@ -170,7 +202,7 @@ const Sidebar = ({
 
       if (!upgradeRes.ok) {
         const err = await upgradeRes.json().catch(() => ({}));
-        alert(`Subscription failed: ${upgradeRes.status}${err?.message ? ` - ${err.message}` : ''}`);
+        try { (window.__toast?.push || (()=>{}))({ message: `Subscription failed: ${upgradeRes.status}${err?.message ? ` - ${err.message}` : ''}`, type: 'error' }); } catch(_) {}
         if (btn) { btn.disabled = false; btn.innerText = 'Subscribe / Start Trial'; }
         return;
       }
@@ -183,10 +215,10 @@ const Sidebar = ({
       }
       safeLocalStorage.setItem('subscriptionStatus', 'active');
       setSubscriptionStatus('active');
-      alert('Subscription upgraded successfully!');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Subscription upgraded successfully!', type: 'success' }); } catch(_) {}
     } catch (error) {
       console.error('Subscribe error:', error);
-      alert('Subscription failed. Please try again.');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Subscription failed. Please try again.', type: 'error' }); } catch(_) {}
     }
   };
 
@@ -368,122 +400,77 @@ const Sidebar = ({
   };
 
   return (
-    <div className={`w-80 border-r border-gray-800/50 flex flex-col sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto themed-scrollbar ${
+    <motion.div
+      animate={{ width: isCollapsed ? 64 : 256 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+      style={{ width: 'var(--sidebar-w, 16rem)' }}
+      className={`${
       isDark ? 'bg-black' : 'bg-red-900/20'
-    }`}>
-      {/* Header */}
-      <div className={`p-6 border-b ${isDark ? 'border-gray-800/50' : 'border-red-800/50'}`}>
-        <h2 className={`text-xl font-bold bg-clip-text text-transparent ${
-          isDark 
-            ? 'bg-gradient-to-r from-red-500 to-rose-500' 
-            : 'bg-gradient-to-r from-red-300 to-red-100'
-        }`}>
-          AI Studio
-        </h2>
-        <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-red-200'}`}>Choose your creative tool</p>
-      </div>
+      } border-r border-gray-800/50 flex flex-col sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto themed-scrollbar`}
+    >
+      {/* Header removed per request */}
 
-      {/* Chat History Section */}
-      <div className="flex-1">
-        <div className="p-4">
-          {/* Subscribe button */}
+      {/* Collapsed top expand button */}
+      {isCollapsed && (
+        <div className="p-3 sticky top-0 z-20 bg-black border-b border-red-600/40">
           <button
-            onClick={handleSubscribe}
-            id="subscribe-btn"
-            disabled={isCheckingSubscription || subscriptionStatus === 'active'}
-            className={`w-full mb-4 flex items-center justify-center gap-2 rounded-xl font-medium py-3 transition-colors ${
-              subscriptionStatus === 'active' 
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white cursor-not-allowed' 
-                : subscriptionStatus === 'trial'
-                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
-                : 'bg-gradient-to-r from-amber-500 to-yellow-500 text-black hover:from-amber-600 hover:to-yellow-600'
-            } ${isCheckingSubscription ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => {
+              const next = !isCollapsed;
+              setIsCollapsed(next);
+              try { safeLocalStorage.setItem('sidebarCollapsed', String(next)); } catch (_) {}
+            }}
+            className="ui-icon-btn"
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
           >
-            <Crown className="w-5 h-5" />
-            {isCheckingSubscription 
-              ? 'Checking...' 
-              : subscriptionStatus === 'active' 
-              ? 'Subscribed' 
-              : subscriptionStatus === 'trial'
-              ? 'Trial Active'
-              : 'Subscribe / Start Trial'
-            }
+            <PanelLeftClose className="w-4 h-4 rotate-180" />
           </button>
+        </div>
+      )}
 
-          {/* Explore button */}
-          <button
-            onClick={() => onToolSelect('explore')}
-            className={`w-3/4 mb-3 flex items-center gap-2 p-2 rounded-lg transition-all duration-200 ${
-              activeTool === 'explore'
-                ? 'text-purple-400'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span className="text-sm font-medium">Explore</span>
-          </button>
-
-          {/* Gallery button */}
-          <button
-            onClick={() => onToolSelect('gallery')}
-            className={`w-3/4 mb-3 flex items-center gap-2 p-2 rounded-lg transition-all duration-200 ${
-              activeTool === 'gallery'
-                ? 'text-cyan-400'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <Images className="w-4 h-4" />
-            <span className="text-sm font-medium">Image Gallery</span>
-          </button>
-
-          {/* Avatars Gallery button */}
-          <button
-            onClick={() => onToolSelect('avatarsGallery')}
-            className={`w-3/4 mb-3 flex items-center gap-2 p-2 rounded-lg transition-all duration-200 ${
-              activeTool === 'avatarsGallery'
-                ? 'text-green-400'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            <span className="text-sm font-medium">Avatars Gallery</span>
-          </button>
-
-          {/* Video Gallery button */}
-          <button
-            onClick={() => onToolSelect('videoGallery')}
-            className={`w-3/4 mb-3 flex items-center gap-2 p-2 rounded-lg transition-all duration-200 ${
-              activeTool === 'videoGallery'
-                ? 'text-purple-400'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <PlayCircle className="w-4 h-4" />
-            <span className="text-sm font-medium">My Videos</span>
-          </button>
-
-
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" />
-              Chat History
-            </h3>
-            <button
-              onClick={onCreateNewChat}
-              className="p-1.5 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-            >
-              <Plus className="w-4 h-4 text-gray-400" />
-            </button>
+      {/* Essentials (sticky) */}
+      {!isCollapsed && (
+        <div className="px-3 md:px-4 py-1 sticky top-0 z-20 bg-black border-b border-red-600/40">
+          <div className="flex items-center justify-end mb-2">
+            <button onClick={() => setIsCollapsed(true)} className="ui-icon-btn" title="Collapse sidebar"><PanelLeftClose className="w-4 h-4"/></button>
           </div>
+          <div className="space-y-1">
+            <button onClick={() => onCreateNewChat('chat')} className="ui-row" title="New chat"><Plus className="w-4 h-4"/> New chat</button>
+            <button onClick={() => onToolSelect('image')} className="ui-row"><Image className="w-4 h-4"/> Image Creation</button>
+            <button onClick={() => onToolSelect('video')} className="ui-row"><Video className="w-4 h-4"/> Video Creation</button>
+            <button onClick={() => onToolSelect('avatar')} className="ui-row"><User className="w-4 h-4"/> Avatar Creation</button>
+            <button onClick={() => onToolSelect('explore')} className="ui-row"><Compass className="w-4 h-4"/> Explore</button>
+          </div>
+        </div>
+      )}
+
+      {/* Secondary shortcuts under sticky (non-sticky) */}
+      {!isCollapsed && (
+        <div className="px-3 md:px-4 pb-2 pt-1">
+          <div className="space-y-1">
+            <button onClick={() => onToolSelect('gallery')} className="ui-row"><Images className="w-4 h-4"/> Image Gallery</button>
+            <button onClick={() => onToolSelect('avatarsGallery')} className="ui-row"><User className="w-4 h-4"/> Avatars Gallery</button>
+            <button onClick={() => onToolSelect('videoGallery')} className="ui-row"><PlayCircle className="w-4 h-4"/> My Videos</button>
+            <button onClick={() => onToolSelect('currency')} className="ui-row"><DollarSign className="w-4 h-4"/> Currency</button>
+            <button onClick={() => { try { (window.__toast?.push||(()=>{}))({ message: 'Press Ctrl/Cmd+K to search chats', type: 'info' }); } catch(_) {} }} className="ui-row"><Search className="w-4 h-4"/> Search chats</button>
+            <button onClick={() => onToolSelect('explore')} className="ui-row"><BookOpen className="w-4 h-4"/> Library</button>
+          </div>
+        </div>
+      )}
+
+      {/* Chat History Section (GPT-like) */}
+      <div className={`flex-1 ${isCollapsed ? 'overflow-hidden' : ''}`}>
+        <div className={`p-2 md:p-4 pt-2 transition-opacity ${isCollapsed ? 'opacity-0 pointer-events-none select-none' : 'opacity-100'}`}>
+          <div className="text-xs text-gray-400 mb-2">Chats</div>
 
           {/* Chat Histories by Tool */}
-          {tools.map((tool) => {
+          {tools.filter(t=>['chat','image','video','avatar','avatarVideo'].includes(t.id)).map((tool) => {
             const history = getChatsInBackendOrder(tool.id);
             if (history.length === 0) return null;
 
             return (
               <div key={tool.id} className="mb-6">
-                <h4 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
+                <h4 className="text-[10px] uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-2">
                   <tool.icon className="w-3 h-3" />
                   {tool.name}
                 </h4>
@@ -491,7 +478,7 @@ const Sidebar = ({
                   {history.map((chat, index) => (
                     <motion.div
                       key={chat.id}
-                      className="w-full p-3 rounded-lg bg-gray-800/30 hover:bg-gray-700/40 transition-all duration-200 group flex items-start gap-2"
+                      className="w-full p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-150 group flex items-start gap-2"
                       whileHover={{ x: 4 }}
                       whileTap={{ scale: 0.98 }}
                     >
@@ -501,7 +488,7 @@ const Sidebar = ({
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-200 truncate">
+                            <p className="text-sm text-gray-200 truncate" title={chat.title || `Chat ${index + 1}`}>
                               {chat.title || `Chat ${index + 1}`}
                             </p>
                             <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
@@ -537,221 +524,17 @@ const Sidebar = ({
         </div>
       </div>
 
-      {/* AI Tools - Collapsible */}
-      <div className="p-4 border-t border-gray-800/50">
-        <div 
-          className="group relative"
-          onMouseEnter={(e) => {
-            const panel = e.currentTarget.querySelector('.tools-panel');
-            if (panel) {
-              panel.style.opacity = '1';
-              panel.style.height = 'auto';
-              panel.style.pointerEvents = 'auto';
-            }
-          }}
-          onMouseLeave={(e) => {
-            const panel = e.currentTarget.querySelector('.tools-panel');
-            if (panel) {
-              panel.style.opacity = '0';
-              panel.style.height = '0';
-              panel.style.pointerEvents = 'none';
-            }
-          }}
-        >
-          {/* Static Tab */}
-          <motion.div
-            className="w-full p-4 rounded-xl bg-gradient-to-r from-red-600/20 to-red-800/20 border border-red-600/30 hover:from-red-600/30 hover:to-red-800/30 transition-all duration-300 cursor-pointer"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              const panel = e.currentTarget.parentElement.querySelector('.tools-panel');
-              if (panel) {
-                const isVisible = panel.style.opacity === '1';
-                if (isVisible) {
-                  panel.style.opacity = '0';
-                  panel.style.height = '0';
-                  panel.style.pointerEvents = 'none';
-                } else {
-                  panel.style.opacity = '1';
-                  panel.style.height = 'auto';
-                  panel.style.pointerEvents = 'auto';
-                }
-              }
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-r from-red-600 to-red-800">
-                <Bot className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="font-medium text-white">AI Tools</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-xs text-gray-300">
-                    {activeTool ? `${tools.find(t => t.id === activeTool)?.name || 'AI Tool'} selected` : '6 tools available'}
-                  </p>
-                  <motion.div
-                    className="flex -space-x-1"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    {tools.slice(0, 3).map((tool, index) => {
-                      const Icon = tool.icon;
-                      const isActive = activeTool === tool.id;
-                      return (
-                        <motion.div
-                          key={tool.id}
-                          className={`w-6 h-6 rounded-full flex items-center justify-center border relative ${
-                            isActive 
-                              ? `bg-gradient-to-r ${tool.color} border-white/50 shadow-lg` 
-                              : 'bg-gray-700/50 border-gray-600'
-                          }`}
-                          initial={{ scale: 0, rotate: -180 }}
-                          animate={{ 
-                            scale: isActive ? 1.1 : 1, 
-                            rotate: 0,
-                            boxShadow: isActive ? `0 0 20px ${tool.color.split('-')[1] === 'indigo' ? '#6366f1' : tool.color.split('-')[1] === 'purple' ? '#a855f7' : '#ef4444'}` : 'none'
-                          }}
-                          transition={{ delay: 0.8 + index * 0.1, duration: 0.3 }}
-                        >
-                          <Icon className={`w-3 h-3 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                          {isActive && (
-                            <motion.div
-                              className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-gradient-to-r from-red-500 to-rose-500 border-2 border-gray-900"
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              transition={{ delay: 0.2 }}
-                            />
-                          )}
-                        </motion.div>
-                      );
-                    })}
-                    <motion.div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center border ${
-                        activeTool && !tools.slice(0, 3).find(t => t.id === activeTool)
-                          ? 'bg-gradient-to-r from-orange-500 to-red-500 border-white/50'
-                          : 'bg-gray-600/50 border-gray-500'
-                      }`}
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 1.2, duration: 0.3 }}
-                    >
-                      <span className={`text-xs ${activeTool && !tools.slice(0, 3).find(t => t.id === activeTool) ? 'text-white' : 'text-gray-300'}`}>
-                        {activeTool && !tools.slice(0, 3).find(t => t.id === activeTool) ? '!' : '+3'}
-                      </span>
-                    </motion.div>
-                  </motion.div>
-                </div>
-              </div>
-              <motion.div
-                className="flex flex-col items-center gap-1"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.5 }}
-              >
-                <motion.div
-                  className="w-2 h-2 rounded-full bg-gradient-to-r from-red-500 to-rose-500"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
-                <motion.div
-                  className="w-1 h-1 rounded-full bg-gray-500"
-                  animate={{ scale: [1, 1.3, 1] }}
-                  transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
-                />
-                <motion.div
-                  className="w-1 h-1 rounded-full bg-gray-600"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 1.8, repeat: Infinity, delay: 1 }}
-                />
-              </motion.div>
-            </div>
-          </motion.div>
-
-          {/* Expandable Tools Panel */}
-          <div
-            className="tools-panel absolute bottom-full left-0 right-0 mb-2 bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-xl shadow-2xl overflow-hidden z-50 transition-all duration-300"
-            style={{ 
-              opacity: 0,
-              height: 0,
-              pointerEvents: 'none'
-            }}
-          >
-            <div className="p-2 space-y-1">
-              {tools.map((tool, index) => {
-            const Icon = tool.icon;
-            const isActive = activeTool === tool.id;
-            
-            return (
-              <motion.button
-                key={tool.id}
-                    onClick={() => {
-                      onToolSelect(tool.id);
-                      // Close the panel after selection
-                      const panel = document.querySelector('.tools-panel');
-                      if (panel) {
-                        panel.style.opacity = '0';
-                        panel.style.height = '0';
-                        panel.style.pointerEvents = 'none';
-                      }
-                    }}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ 
-                      opacity: 1, 
-                      x: 0,
-                      transition: { delay: index * 0.05, duration: 0.2 }
-                    }}
-                    whileHover={{ 
-                      scale: 1.02,
-                      transition: { duration: 0.2 }
-                    }}
-                    className={`w-full p-3 rounded-lg transition-all duration-200 flex items-center gap-3 group ${
-                  isActive 
-                        ? `${tool.bgColor} ${tool.borderColor} border shadow-lg` 
-                        : 'bg-gray-800/50 hover:bg-gray-700/60 border border-transparent'
-                }`}
-                whileTap={{ scale: 0.98 }}
-              >
-                    <div className={`p-1.5 rounded-md ${
-                  isActive 
-                    ? `bg-gradient-to-r ${tool.color} text-white` 
-                    : 'bg-gray-700/50 text-gray-400 group-hover:text-gray-200'
-                    } transition-all duration-200`}>
-                      <Icon className="w-4 h-4" />
-                </div>
-                    <div className="flex-1 text-left min-w-0">
-                      <p className={`text-sm font-medium truncate ${
-                    isActive ? 'text-white' : 'text-gray-300 group-hover:text-white'
-                  } transition-colors`}>
-                    {tool.name}
-                  </p>
-                      <p className={`text-xs truncate ${
-                    isActive ? 'text-gray-200' : 'text-gray-500 group-hover:text-gray-300'
-                  } transition-colors`}>
-                    {tool.id === 'chat' && 'Chat with AI LLM model'}
-                    {tool.id === 'image' && 'Generate AI images from text'}
-                    {tool.id === 'video' && 'Create AI-powered videos'}
-                    {tool.id === 'avatar' && 'Design custom avatars'}
-                    {tool.id === 'avatarVideo' && 'Combine avatars with video'}
-                    {tool.id === 'apiTest' && 'Test LLM API connection'}
-                  </p>
-                </div>
-                {isActive && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                        className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-red-500 to-rose-500"
-                  />
-                )}
-              </motion.button>
-            );
-          })}
-            </div>
+      {/* Footer profile (minimal) */}
+      <div className="px-3 md:px-4 py-3 border-t border-gray-800/50 mt-auto">
+        <div className="w-full flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-sm text-white truncate">{user?.firstName || user?.email?.split('@')[0] || 'User'}</p>
+            <p className="text-xs text-gray-400 truncate">{subscriptionStatus === 'active' ? 'Pro Plan' : subscriptionStatus === 'trial' ? 'Trial' : 'Free'}</p>
           </div>
+          <button onClick={handleSubscribe} id="subscribe-btn" className="ui-icon-btn" title="Manage plan"><Crown className="w-4 h-4"/></button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

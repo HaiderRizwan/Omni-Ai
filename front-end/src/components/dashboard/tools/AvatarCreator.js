@@ -232,7 +232,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
       '#FFA500': 'auburn',
       '#DC143C': 'red',
       '#800080': 'purple',
-      '#0000FF': 'blue',
+      '#0000FF': '  ',
       '#FF69B4': 'pink'
     };
     return hairColors[color] || 'brown';
@@ -431,7 +431,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
     } catch (error) {
       console.error('Error generating avatar:', error);
-      alert(`Error generating avatar: ${error.message}`);
+      try { (window.__toast?.push || (()=>{}))({ message: `Error generating avatar: ${error.message}`, type: 'error' }); } catch(_) {}
     } finally {
       setIsGenerating(false);
     }
@@ -460,42 +460,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-800/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500">
-              <User className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">AI Avatar Creator</h1>
-              <p className="text-gray-400">Design unique digital avatars with AI</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-            >
-              <Settings className="w-5 h-5 text-gray-400" />
-            </button>
-            <button
-              onClick={handleNewChat}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 transition-all"
-            >
-              New Chat
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Generation Mode Switch */}
-      <div className="p-4 bg-gray-900/50 border-b border-gray-800/50 flex justify-center">
+      {/* Generation Mode Switch (header removed) */}
+      <div className="p-3 bg-white/5 border-b border-white/10 flex justify-center">
         <div className="flex items-center gap-2 p-1 rounded-lg bg-gray-800">
           <button
             onClick={() => setGenerationMode('text')}
             className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-              generationMode === 'text' ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-gray-700'
+              generationMode === 'text' ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' : 'text-gray-300 hover:bg-white/10'
             }`}
           >
             Text to Avatar
@@ -503,7 +474,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
           <button
             onClick={() => setGenerationMode('image')}
             className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-              generationMode === 'image' ? 'bg-red-500 text-white' : 'text-gray-400 hover:bg-gray-700'
+              generationMode === 'image' ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' : 'text-gray-300 hover:bg-white/10'
             }`}
           >
             Image to Avatar
@@ -517,7 +488,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
-          className="border-b border-gray-800/50 bg-gray-900/30"
+          className="border-b border-white/10 bg-white/5"
         >
           <div className="p-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
@@ -727,9 +698,86 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
         </motion.div>
       )}
 
+      {/* Inline compact settings bar (GPT-like) */}
+      <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Gender quick chips */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Gender</span>
+            {['female', 'male', 'any'].map((gender) => (
+              <button
+                key={gender}
+                onClick={() => setSettings(prev => ({ ...prev, gender }))}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                  settings.gender === gender
+                    ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
+              >
+                {gender.charAt(0).toUpperCase() + gender.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Style */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Style</span>
+            <select
+              value={settings.style}
+              onChange={(e) => setSettings(prev => ({ ...prev, style: e.target.value }))}
+              className="px-2 py-1 rounded text-xs bg-black/30 border border-white/10 text-white"
+            >
+              <option value="realistic">Realistic</option>
+              <option value="cartoon">Cartoon</option>
+              <option value="anime">Anime</option>
+              <option value="pixel">Pixel</option>
+            </select>
+          </div>
+
+          {/* Age */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Age</span>
+            <select
+              value={settings.age}
+              onChange={(e) => setSettings(prev => ({ ...prev, age: e.target.value }))}
+              className="px-2 py-1 rounded text-xs bg-black/30 border border-white/10 text-white"
+            >
+              <option value="child">Child</option>
+              <option value="teen">Teen</option>
+              <option value="adult">Adult</option>
+              <option value="elderly">Elderly</option>
+            </select>
+          </div>
+
+          {/* Expression */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Expression</span>
+            <select
+              value={settings.expression}
+              onChange={(e) => setSettings(prev => ({ ...prev, expression: e.target.value }))}
+              className="px-2 py-1 rounded text-xs bg-black/30 border border-white/10 text-white"
+            >
+              <option value="neutral">Neutral</option>
+              <option value="happy">Happy</option>
+              <option value="serious">Serious</option>
+              <option value="confident">Confident</option>
+            </select>
+          </div>
+
+          {/* More settings toggle */}
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="ml-auto px-3 py-1 rounded text-xs bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10"
+            title={showSettings ? 'Hide settings' : 'More settings'}
+          >
+            {showSettings ? 'Hide' : 'More'}
+          </button>
+        </div>
+      </div>
+
       {/* Avatar Collection */}
       {avatarCollection.length > 0 && (
-        <div className="border-b border-gray-800/50 bg-gray-900/30 p-4">
+        <div className="border-b border-white/10 bg-white/5 p-4">
           <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
             <User className="w-5 h-5" />
             Your Avatar Collection ({avatarCollection.length})
@@ -740,7 +788,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 <img
                   src={avatar.avatarUrl || `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/avatars/public/${avatar._id}`}
                   alt={avatar.prompt}
-                  className="w-20 h-20 rounded-lg object-cover border border-gray-700/50 hover:border-purple-500/50 transition-colors"
+                  className="w-20 h-20 rounded-lg object-cover border border-white/10 hover:border-red-500/50 transition-colors"
                 />
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                   <button
@@ -830,7 +878,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                       const token = safeLocalStorage.getItem('token');
                                       
                                       if (!token) {
-                                        alert('Please log in to save avatars.');
+                                        try { (window.__toast?.push || (()=>{}))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch(_) {}
                                         return;
                                       }
 
@@ -857,13 +905,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                         if (onAddToCollection) {
                                           onAddToCollection(imageData, true);
                                         }
-                                        alert('Avatar saved to your collection!');
+                                        try { (window.__toast?.push || (()=>{}))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch(_) {}
                                       } else {
-                                        alert(result.message || 'Failed to save avatar');
+                                        try { (window.__toast?.push || (()=>{}))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch(_) {}
                                       }
                                     } catch (error) {
                                       console.error('Error saving avatar:', error);
-                                      alert('Failed to save avatar. Please try again.');
+                                      try { (window.__toast?.push || (()=>{}))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch(_) {}
                                     }
                                   }}
                                   className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-white transition-colors"
@@ -887,7 +935,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                     const token = safeLocalStorage.getItem('token');
                                     
                                     if (!token) {
-                                      alert('Please log in to save avatars.');
+                                      try { (window.__toast?.push || (()=>{}))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch(_) {}
                                       return;
                                     }
 
@@ -914,13 +962,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                       if (onAddToCollection) {
                                         onAddToCollection(imageData, true);
                                       }
-                                      alert('Avatar saved to your collection!');
+                                      try { (window.__toast?.push || (()=>{}))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch(_) {}
                                     } else {
-                                      alert(result.message || 'Failed to save avatar');
+                                      try { (window.__toast?.push || (()=>{}))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch(_) {}
                                     }
                                   } catch (error) {
                                     console.error('Error saving avatar:', error);
-                                    alert('Failed to save avatar. Please try again.');
+                                    try { (window.__toast?.push || (()=>{}))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch(_) {}
                                   }
                                 }}
                                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
@@ -953,36 +1001,27 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
           {/* Input Area */}
           <div className="p-6 border-t border-gray-800/50">
-            {/* Quick Gender Selection */}
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-sm text-gray-400">Gender:</span>
-              <div className="flex gap-2">
-                {['female', 'male', 'any'].map((gender) => (
-                  <button
-                    key={gender}
-                    onClick={() => setSettings(prev => ({ ...prev, gender }))}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
-                      settings.gender === gender
-                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
-                        : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
-                    }`}
-                  >
-                    {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
             
             {generationMode === 'text' ? (
               <div className="flex gap-3">
                 <div className="flex-1 relative">
-                  <input
-                    type="text"
+                  <textarea
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      const el = e.target;
+                      el.style.height = 'auto';
+                      el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleGenerate();
+                      }
+                    }}
                     placeholder="Describe the avatar you want to create..."
-                    className="w-full p-4 pr-12 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20"
-                    onKeyPress={(e) => e.key === 'Enter' && handleGenerate()}
+                    className="w-full p-4 pr-12 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 resize-none max-h-40"
+                    rows="3"
                   />
                   <button
                     onClick={handleGenerate}
@@ -1067,7 +1106,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                     
                     if (!currentMessage?.imageId) {
                       console.error('❌ No imageId found in message:', currentMessage);
-                      alert('No image ID found. Please generate a new avatar.');
+                      try { (window.__toast?.push || (()=>{}))({ message: 'No image ID found. Please generate a new avatar.', type: 'warning' }); } catch(_) {}
                       return;
                     }
 
@@ -1075,7 +1114,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                     const token = safeLocalStorage.getItem('token');
                     
                     if (!token) {
-                      alert('Please log in to save avatars.');
+                      try { (window.__toast?.push || (()=>{}))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch(_) {}
                       return;
                     }
 
@@ -1102,13 +1141,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                       if (onAddToCollection) {
                         onAddToCollection(imageData, true);
                       }
-                      alert('Avatar saved to your collection!');
+                      try { (window.__toast?.push || (()=>{}))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch(_) {}
                     } else {
-                      alert(result.message || 'Failed to save avatar');
+                      try { (window.__toast?.push || (()=>{}))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch(_) {}
                     }
                   } catch (error) {
                     console.error('Error saving avatar:', error);
-                    alert('Failed to save avatar. Please try again.');
+                    try { (window.__toast?.push || (()=>{}))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch(_) {}
                   }
                 }}
                 className="w-full p-3 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all flex items-center justify-center gap-2"

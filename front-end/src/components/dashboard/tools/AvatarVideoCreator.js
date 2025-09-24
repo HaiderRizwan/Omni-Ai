@@ -204,7 +204,7 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
         }
       }
       
-      alert(`Error generating avatar video: ${errorMessage}`);
+      try { (window.__toast?.push || (()=>{}))({ message: `Error generating avatar video: ${errorMessage}`, type: 'error' }); } catch(_) {}
     } finally {
       setIsGenerating(false);
     }

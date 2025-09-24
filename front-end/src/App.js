@@ -1,5 +1,6 @@
 import './App.css';
 import { useState, useEffect } from 'react';
+import { useToast } from './components/ToastProvider';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -15,8 +16,10 @@ import safeLocalStorage from './utils/localStorage';
 function App() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { push } = useToast();
 
   useEffect(() => {
+    try { window.__toast = { push }; } catch (_) {}
     // Check if user is logged in
     const storedUser = safeLocalStorage.getItem('user');
     const token = safeLocalStorage.getItem('token');

@@ -67,14 +67,14 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
         // Show detailed validation errors
         if (data.errors && data.errors.length > 0) {
           const errorMessages = data.errors.map(err => `${err.field}: ${err.message}`).join('\n');
-          alert(`Validation failed:\n${errorMessages}`);
+          try { (window.__toast?.push || (()=>{}))({ message: `Validation failed:\n${errorMessages}`, type: 'error' }); } catch(_) {}
         } else {
-          alert(data.message || 'Authentication failed');
+          try { (window.__toast?.push || (()=>{}))({ message: data.message || 'Authentication failed', type: 'error' }); } catch(_) {}
         }
       }
     } catch (error) {
       console.error('Auth error:', error);
-      alert('Network error. Please try again.');
+      try { (window.__toast?.push || (()=>{}))({ message: 'Network error. Please try again.', type: 'error' }); } catch(_) {}
     } finally {
       setIsLoading(false);
     }
