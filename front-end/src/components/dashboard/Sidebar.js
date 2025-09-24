@@ -21,7 +21,8 @@ import {
   BookOpen,
   DollarSign,
   Compass,
-  PanelLeftClose
+  PanelLeftClose,
+  Share2
 } from 'lucide-react';
 
 const Sidebar = ({ 
@@ -127,6 +128,100 @@ const Sidebar = ({
   useEffect(() => {
     checkSubscriptionStatus();
   }, []);
+
+  const loadPhylloScript = () => new Promise((resolve, reject) => {
+    if (window.PhylloConnect) return resolve();
+    const existing = document.getElementById('phyllo-connect-script');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', (e) => reject(e));
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'phyllo-connect-script';
+    script.src = (process.env.REACT_APP_PHYLLO_CONNECT_URL || 'https://cdn.getphyllo.com/connect/v2/phyllo-connect.js');
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = (e) => reject(e);
+    document.body.appendChild(script);
+  });
+
+  const ensurePhylloUser = async () => {
+    const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    const token = safeLocalStorage.getItem('token');
+    if (!token) throw new Error('Please log in first');
+    let phylloUserId = safeLocalStorage.getItem('phylloUserId');
+    if (phylloUserId) return phylloUserId;
+
+    const name = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || (user?.username || 'User');
+    const externalId = user?._id || user?.email || user?.username;
+    const res = await fetch(`${apiBase}/api/phyllo/users`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        // Auth header optional; endpoint is public now
+      },
+      body: JSON.stringify({ name, externalId })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+      const apiMsg = body?.message || body?.error || `${res.status}`;
+      throw new Error(typeof apiMsg === 'string' ? apiMsg : JSON.stringify(apiMsg));
+    }
+    phylloUserId = body?.user?.id || body?.user?._id || body?.id;
+    if (!phylloUserId) throw new Error('Invalid Phyllo user response');
+    try { safeLocalStorage.setItem('phylloUserId', phylloUserId); } catch(_) {}
+    return phylloUserId;
+  };
+
+  const startPhylloConnect = async () => {
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const phylloUserId = await ensurePhylloUser();
+      const tokenRes = await fetch(`${apiBase}/api/phyllo/sdk-token`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          // Auth header optional; endpoint is public now
+        },
+        body: JSON.stringify({ userId: phylloUserId })
+      });
+      if (!tokenRes.ok) throw new Error('Failed to get Phyllo SDK token');
+      const tokenBody = await tokenRes.json();
+      if (!tokenRes.ok) {
+        if (tokenRes.status === 401) {
+          throw new Error('Not authenticated. Please log in again.');
+        }
+      }
+      const connectToken = tokenBody?.token?.sdk_token || tokenBody?.token?.token || tokenBody?.sdk_token;
+      if (!connectToken) throw new Error('Invalid SDK token response');
+
+      await loadPhylloScript();
+      if (!window.PhylloConnect) throw new Error('Phyllo Connect SDK not available');
+
+      const pc = window.PhylloConnect.initialize({
+        token: connectToken,
+        environment: (process.env.REACT_APP_PHYLLO_ENV || 'production'),
+        onAccountConnected: (account) => {
+          try { (window.__toast?.push||(()=>{}))({ message: 'Account connected', type: 'success' }); } catch(_) {}
+          console.log('Phyllo account connected:', account);
+        },
+        onExit: (info) => {
+          console.log('Phyllo Connect exited:', info);
+        },
+        onEvent: (event) => {
+          console.log('Phyllo event:', event);
+        }
+      });
+      pc.open();
+    } catch (e) {
+      console.error('Phyllo Connect error:', e);
+      try { (window.__toast?.push||(()=>{}))({ message: e?.message || 'Failed to start Connect', type: 'error' }); } catch(_) {}
+    }
+  };
 
   const handleSubscribe = async () => {
     try {
@@ -454,6 +549,7 @@ const Sidebar = ({
             <button onClick={() => onToolSelect('currency')} className="ui-row"><DollarSign className="w-4 h-4"/> Currency</button>
             <button onClick={() => { try { (window.__toast?.push||(()=>{}))({ message: 'Press Ctrl/Cmd+K to search chats', type: 'info' }); } catch(_) {} }} className="ui-row"><Search className="w-4 h-4"/> Search chats</button>
             <button onClick={() => onToolSelect('explore')} className="ui-row"><BookOpen className="w-4 h-4"/> Library</button>
+            <button onClick={startPhylloConnect} className="ui-row"><Share2 className="w-4 h-4"/> Connect Socials</button>
           </div>
         </div>
       )}

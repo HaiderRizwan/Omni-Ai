@@ -93,6 +93,24 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
+  },
+  // Phyllo integration fields
+  phylloUserId: {
+    type: String,
+    default: null,
+    index: true
+  },
+  phylloAccounts: {
+    type: [
+      new mongoose.Schema({
+        accountId: { type: String, required: true },
+        platform: { type: String },
+        username: { type: String },
+        profileUrl: { type: String },
+        connectedAt: { type: Date }
+      }, { _id: false })
+    ],
+    default: []
   }
 }, {
   timestamps: true,

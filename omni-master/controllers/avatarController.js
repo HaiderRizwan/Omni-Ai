@@ -5,6 +5,8 @@ const axios = require('axios');
 const https = require('https');
 const http = require('http');
 const { saveBufferToUploads } = require('../utils/localUploader');
+const { uploadTo0x0 } = require('../utils/zeroXUploader');
+const { publish } = require('../utils/sseHub');
 
 // Import the working A2E image generation function from imageController
 const { generateWithA2ETextToImage, generateWithA2ETextToImageForAvatar } = require('./imageController');
@@ -175,13 +177,14 @@ const generateAvatarFromImage = async (req, res) => {
       user: req.user._id,
       type: 'avatar',
       status: 'pending',
-      parameters: { imageUrl, gender, name: name || 'Custom Avatar' },
+      parameters: { imageUrl, gender, name: name || 'Custom Avatar', imageBase64: req.file.buffer.toString('base64') },
       provider: 'a2e',
-      metadata: { pipeline: 'image->avatar' }
+      metadata: { pipeline: 'image->avatar', uploadedImageUrl: imageUrl }
     });
 
     // Start async process
-    processAvatarGenerationImage(job._id, { imageUrl, gender, name: name || 'Custom Avatar' });
+  processAvatarGenerationImage(job._id, { imageUrl, gender, name: name || 'Custom Avatar', imageBase64: req.file.buffer.toString('base64') });
+  try { publish(req.user._id, 'avatar.started', { jobId: String(job._id), imageUrl, gender, name: name || 'Custom Avatar' }); } catch (_) {}
 
     res.status(202).json({
       success: true,
@@ -607,133 +610,12 @@ const getEyeColorDescription = (color) => {
   return eyeColors[color] || 'brown';
 };
 
-// Helper function to upload image to A2E and get public URL
+// Helper function to upload image to file.io and get public URL
 const uploadImageAndGetUrl = async (file) => {
-  console.log('🔄 Processing image for A2E avatar training:', file.originalname);
-  
-  try {
-    // Convert image to base64
-    const base64Image = file.buffer.toString('base64');
-    console.log('📷 Image converted to base64, length:', base64Image.length);
-    
-    // Use A2E's text-to-image API to process and host the image
-    // This will give us a publicly accessible URL that A2E can use for training
-    console.log('🚀 Uploading image to A2E text-to-image for public hosting...');
-    
-    const imageProcessingPayload = {
-      name: "Avatar Training Image",
-      prompt: "high quality portrait, realistic, detailed face, professional photo", // Minimal prompt to process the image
-      req_key: "high_aes_general_v21_L",
-      width: 1024,
-      height: 1024,
-      input_images: [base64Image] // Use the uploaded image as input
-    };
-    
-    const fallbackUrls = [
-      'https://video.a2e.ai/api/v1',
-      'https://video.a2e.com.cn/api/v1',
-      'https://api.a2e.ai/api/v1'
-    ];
-    
-    let response = null;
-    let lastError = null;
-    
-    for (const baseUrl of fallbackUrls) {
-      try {
-        console.log(`📡 Trying A2E endpoint: ${baseUrl}`);
-        response = await axios.post(
-          `${baseUrl}/userText2image/start`,
-          imageProcessingPayload,
-          {
-            headers: {
-              'Authorization': `Bearer ${A2E_API_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 120000
-          }
-        );
-        console.log(`✅ Successfully uploaded to: ${baseUrl}`);
-        break;
-      } catch (error) {
-        console.log(`❌ Failed to upload to ${baseUrl}:`, error.message);
-        lastError = error;
-      }
-    }
-    
-    if (!response) {
-      throw lastError || new Error('All A2E endpoints failed for image upload');
-    }
-    
-    if (response.data.code !== 0) {
-      throw new Error(`A2E image processing failed: ${response.data.message || 'Unknown error'}`);
-    }
-    
-    const taskId = response.data.data._id;
-    console.log('🎯 A2E image processing task ID:', taskId);
-    
-    // Poll for completion to get the public URL
-    console.log('⏳ Waiting for A2E to process the image...');
-    for (let i = 0; i < 60; i++) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      let statusResponse = null;
-      for (const baseUrl of fallbackUrls) {
-        try {
-          statusResponse = await axios.get(
-            `${baseUrl}/userText2image/${taskId}`,
-            {
-              headers: { 'Authorization': `Bearer ${A2E_API_KEY}` },
-              timeout: 30000
-            }
-          );
-          break;
-        } catch (error) {
-          console.log(`Status check failed for ${baseUrl}:`, error.message);
-        }
-      }
-      
-      if (!statusResponse) {
-        continue; // Try again
-      }
-      
-      const taskData = statusResponse.data.data;
-      console.log(`📊 Processing status: ${taskData.current_status}`);
-      console.log(`🔍 Full task data:`, JSON.stringify(taskData, null, 2));
-      
-      if (taskData.current_status === 'completed') {
-        // Try multiple possible URL field names
-        const possibleUrlFields = ['result_url', 'image_url', 'url', 'output_url', 'final_url', 'originalUrl'];
-        let publicUrl = null;
-        
-        for (const field of possibleUrlFields) {
-          if (taskData[field]) {
-            publicUrl = taskData[field];
-            console.log(`✅ Found image URL in field '${field}':`, publicUrl);
-            break;
-          }
-        }
-        
-        if (publicUrl) {
-          console.log('✅ Image processing completed, public URL:', publicUrl);
-          return publicUrl;
-        } else {
-          console.log('⚠️ Image processing completed but no URL found in any field');
-          console.log('Available fields:', Object.keys(taskData));
-          throw new Error('Image processing completed but no public URL found');
-        }
-      }
-      
-      if (taskData.current_status === 'failed') {
-        throw new Error(`A2E image processing failed: ${taskData.failed_message || 'Unknown error'}`);
-      }
-    }
-    
-    throw new Error('A2E image processing timed out');
-    
-  } catch (error) {
-    console.error('❌ Error processing image for A2E:', error.message);
-    throw error;
-  }
+  console.log('🔄 Uploading image for A2E avatar training via 0x0.st:', file.originalname);
+  const zeroX = await uploadTo0x0(file.buffer, file.originalname);
+  console.log('✅ 0x0.st link:', zeroX);
+  return zeroX;
 };
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -767,6 +649,17 @@ const axiosA2E = axios.create({
   httpAgent: keepAliveAgentHttp,
   httpsAgent: keepAliveAgentHttps,
   timeout: 120000
+});
+
+// Standard headers to avoid WAF blocks on A2E (some endpoints are strict)
+const getA2EHeaders = () => ({
+  'Authorization': `Bearer ${A2E_API_KEY}`,
+  'Content-Type': 'application/json',
+  'Accept': 'application/json, text/plain, */*',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  'x-lang': 'en-US',
+  'Origin': 'https://video.a2e.ai',
+  'Referer': 'https://video.a2e.ai/'
 });
 
 const withRetries = async (fn, { attempts = 3, delayMs = 1500 } = {}) => {
@@ -1143,31 +1036,7 @@ const processAvatarGenerationText = async (jobId, params) => {
             throw new Error('Could not retrieve anchor ID from A2E.');
           }
 
-          // Step 6: Save Avatar
-          console.log('\n--- STEP 6: SAVING AVATAR ---');
-          await job.updateProgress(95, 'Saving avatar...');
-          
-          // Convert base64 to buffer for storage
-          const imageBuffer = Buffer.from(imageBase64.split(',')[1], 'base64');
-          
-          const avatar = await Avatar.create({
-            user: job.user,
-            prompt: enhancedPrompt,
-            originalPrompt: originalPrompt,
-            imageData: imageBuffer,
-            contentType: 'image/png',
-            filename: `avatar_${Date.now()}.png`,
-            size: imageBuffer.length,
-            width, 
-            height,
-            metadata: { 
-              provider: 'a2e', 
-              source: 'text-to-avatar', 
-              a2eAnchorId, 
-              a2eUserVideoTwinId: userVideoTwinId, 
-              a2eTrainingTaskId: trainingTaskId 
-            }
-          });
+          // Step 6 will be handled in the common saving logic below
 
           } catch (trainingError) {
             console.log('❌ Avatar training failed:', trainingError.message);
@@ -1448,7 +1317,7 @@ const processAvatarGenerationImage = async (jobId, params) => {
     await job.start();
     await job.updateProgress(5, 'Starting avatar creation from image...');
     
-    const { imageUrl, gender, name } = params;
+    const { imageUrl, gender, name, imageBase64 } = params;
     console.log('📸 Image URL:', imageUrl);
     console.log('👤 Gender:', gender);
     console.log('📝 Name:', name);
@@ -1480,7 +1349,7 @@ const processAvatarGenerationImage = async (jobId, params) => {
     let trainingResponse;
     try {
       trainingResponse = await withRetries(() => axiosA2E.post(`${A2E_VIDEO_BASE_URL}/userVideoTwin/startTraining`, trainingPayload, { 
-        headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json', 'x-lang': 'en-US' } 
+        headers: getA2EHeaders() 
       }));
       console.log('✅ Primary endpoint successful');
     } catch (err) {
@@ -1494,7 +1363,7 @@ const processAvatarGenerationImage = async (jobId, params) => {
       console.warn('🔄 Retrying A2E training using alternate base:', alt);
       
       trainingResponse = await withRetries(() => axiosA2E.post(`${alt}/userVideoTwin/startTraining`, trainingPayload, { 
-        headers: { 'Authorization': `Bearer ${A2E_API_KEY}`, 'Content-Type': 'application/json', 'x-lang': 'en-US' } 
+        headers: getA2EHeaders() 
       }));
       A2E_VIDEO_BASE_URL = alt;
       console.log('✅ Alternate endpoint successful');
@@ -1515,28 +1384,40 @@ const processAvatarGenerationImage = async (jobId, params) => {
 
     // Step 2: Poll for training completion
     await job.updateProgress(40, 'Training avatar model...');
+    // Store uploaded URL on the job for traceability
+    try {
+      job.metadata = job.metadata || {};
+      if (imageUrl) job.metadata.uploadedImageUrl = imageUrl;
+      await job.save();
+    } catch (e) {
+      console.warn('Could not persist uploadedImageUrl on job:', e.message);
+    }
     let trainingStatus = 'initialized';
     let userVideoTwinId = null;
+    let lastStatusData = null;
     
     for (let i = 0; i < 120; i++) { // Poll for up to 10 minutes
+      console.log(`\n🔄 Training poll ${i + 1}/120...`);
       await new Promise(resolve => setTimeout(resolve, 5000));
       let statusResponse;
       try {
         statusResponse = await withRetries(() => axiosA2E.get(`${A2E_VIDEO_BASE_URL}/userVideoTwin/${trainingTaskId}`, { 
-          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
+          headers: getA2EHeaders() 
         }));
       } catch (err) {
         const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
         console.warn('Retrying A2E status using alternate base:', alt);
-        statusResponse = await withRetries(() => axiosA2E.get(`${alt}/userVideoTwin/${trainingTaskId}`, { 
-          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
-        }));
+              statusResponse = await withRetries(() => axiosA2E.get(`${alt}/userVideoTwin/${trainingTaskId}`, { 
+                headers: getA2EHeaders() 
+              }));
         A2E_VIDEO_BASE_URL = alt;
       }
       
       const statusData = statusResponse.data?.data || {};
+      lastStatusData = statusData;
       trainingStatus = statusData.current_status;
       userVideoTwinId = statusData.user_video_twin_id || statusData.video_twin_id || userVideoTwinId;
+      console.log(`📊 Training poll ${i + 1}: Status = ${trainingStatus}, Twin ID = ${userVideoTwinId}`);
       
       if (trainingStatus === 'completed') break;
       if (trainingStatus === 'failed') {
@@ -1558,49 +1439,83 @@ const processAvatarGenerationImage = async (jobId, params) => {
       throw new Error('A2E avatar training timed out.');
     }
 
-    // Step 3: Get the Anchor ID
+    // Step 3: Get the Anchor ID (prefer direct from status; fallback to list)
     await job.updateProgress(90, 'Getting avatar anchor ID...');
     const isValidObjectId = (v) => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
     const twinIdForList = isValidObjectId(userVideoTwinId) ? userVideoTwinId : (isValidObjectId(trainingTaskId) ? trainingTaskId : null);
     
-    let a2eAnchorId = null;
-    try {
-      const url = twinIdForList
-        ? `${A2E_VIDEO_BASE_URL}/anchor/character_list?user_video_twin_id=${twinIdForList}&type=custom`
-        : `${A2E_VIDEO_BASE_URL}/anchor/character_list?type=custom`;
-      
-      let characterListResponse;
+    let a2eAnchorId = lastStatusData?.anchor_id || null;
+    if (!a2eAnchorId) {
       try {
-        characterListResponse = await withRetries(() => axiosA2E.get(url, { 
-          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
-        }));
-      } catch (err) {
-        const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
-        const altUrl = url.replace(A2E_VIDEO_BASE_URL, alt);
-        console.warn('Retrying A2E anchor list using alternate base:', altUrl);
-        characterListResponse = await withRetries(() => axiosA2E.get(altUrl, { 
-          headers: { 'Authorization': `Bearer ${A2E_API_KEY}` } 
-        }));
-        A2E_VIDEO_BASE_URL = alt;
+        const url = twinIdForList
+          ? `${A2E_VIDEO_BASE_URL}/anchor/character_list?user_video_twin_id=${twinIdForList}&type=custom`
+          : `${A2E_VIDEO_BASE_URL}/anchor/character_list?type=custom`;
+        
+        console.log('🔍 Getting anchor list from:', url);
+        
+        let characterListResponse;
+        try {
+          characterListResponse = await withRetries(() => axiosA2E.get(url, { 
+            headers: getA2EHeaders() 
+          }));
+        } catch (err) {
+          const alt = pickAltVideoBase(A2E_VIDEO_BASE_URL);
+          const altUrl = url.replace(A2E_VIDEO_BASE_URL, alt);
+          console.warn('Retrying A2E anchor list using alternate base:', altUrl);
+          characterListResponse = await withRetries(() => axiosA2E.get(altUrl, { 
+            headers: getA2EHeaders() 
+          }));
+          A2E_VIDEO_BASE_URL = alt;
+        }
+        
+        console.log('📨 Character list response:', JSON.stringify(characterListResponse.data, null, 2));
+        
+        if (characterListResponse.data.code === 0) {
+          const list = characterListResponse.data.data || [];
+          console.log('📋 Character list array:', list);
+          console.log('🔍 Looking for twin ID:', twinIdForList);
+          
+          if (Array.isArray(list) && list.length > 0) {
+            const matched = list.find(item => 
+              item.user_video_twin_id === twinIdForList || 
+              item.video_twin_id === twinIdForList ||
+              item.user_video_twin_id === userVideoTwinId
+            );
+            
+            if (matched) {
+              a2eAnchorId = matched._id;
+              console.log('✅ Found matching anchor by twin ID:', a2eAnchorId);
+            } else {
+              a2eAnchorId = list[0]._id;
+              console.log('✅ Using most recent anchor ID:', a2eAnchorId);
+            }
+          }
+          
+          console.log('🎯 Final anchor ID:', a2eAnchorId);
+        }
+      } catch (e) {
+        console.warn('A2E anchor lookup warning:', e.response?.data || e.message);
       }
-      
-      if (characterListResponse.data.code === 0) {
-        const list = characterListResponse.data.data?.list || [];
-        const matched = list.find(item => item.user_video_twin_id === twinIdForList || item.video_twin_id === twinIdForList);
-        a2eAnchorId = (matched && matched._id) || (list[0] && list[0]._id) || null;
-      }
-    } catch (e) {
-      console.warn('A2E anchor lookup warning:', e.response?.data || e.message);
     }
     
     if (!a2eAnchorId) {
       throw new Error('Could not retrieve anchor ID from A2E.');
     }
 
-    // Step 4: Download the original image and create Avatar
+    // Step 4: Prepare image data and create Avatar
     await job.updateProgress(95, 'Saving avatar...');
-    const finalImageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-    const imageBuffer = Buffer.from(finalImageResponse.data, 'binary');
+    let imageBuffer;
+    if (imageBase64 && typeof imageBase64 === 'string') {
+      try {
+        imageBuffer = Buffer.from(imageBase64, 'base64');
+      } catch (e) {
+        console.warn('Failed to decode base64 from params, falling back to URL download.');
+      }
+    }
+    if (!imageBuffer) {
+      const finalImageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      imageBuffer = Buffer.from(finalImageResponse.data, 'binary');
+    }
 
     const avatar = await Avatar.create({
       user: job.user,
@@ -1626,7 +1541,12 @@ const processAvatarGenerationImage = async (jobId, params) => {
       url: avatar.getAvatarUrl(), 
       id: avatar._id, 
       imageId: avatar._id, 
-      metadata: { a2eAnchorId, a2eUserVideoTwinId: userVideoTwinId, a2eTrainingTaskId: trainingTaskId } 
+      metadata: { 
+        a2eAnchorId, 
+        a2eUserVideoTwinId: userVideoTwinId, 
+        a2eTrainingTaskId: trainingTaskId,
+        uploadedImageUrl: imageUrl
+      } 
     }]);
     
     console.log('✅ Avatar from image job completed:', String(job._id));

@@ -243,6 +243,23 @@ curl -X GET http://localhost:3000/api/videos/job/JOB_ID \
 | `SUNO_API_KEY` | Suno AI API key | Background music |
 | `BIBLE_API_KEY` | Bible API key | Optional for accuracy verification |
 
+### Phyllo Integration
+
+Add the following to your `.env` for Phyllo:
+
+```env
+PHYLLO_CLIENT_ID=your_phyllo_client_id
+PHYLLO_CLIENT_SECRET=your_phyllo_client_secret
+PHYLLO_BASE_URL=https://api.getphyllo.com/v1
+PHYLLO_WEBHOOK_SECRET=optional_if_using_signature_verification
+```
+
+Endpoints:
+- `POST /api/phyllo/users` → create Phyllo user with `{ name, externalId }`
+- `POST /api/phyllo/sdk-token` → generate Connect token with `{ userId }`
+- `POST /api/phyllo/webhook` → receive webhook events
+- `POST /api/phyllo/publish` → publish content `{ accountId, content }`
+
 ## Security Features
 
 - **JWT Authentication**: Secure token-based authentication

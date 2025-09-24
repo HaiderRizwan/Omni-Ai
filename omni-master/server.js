@@ -20,6 +20,9 @@ const characterRoutes = require('./routes/characterRoutes');
 const imageRoutes = require('./routes/imageRoutes');
 const avatarRoutes = require('./routes/avatarRoutes');
 const videoRoutes = require('./routes/videoRoutes');
+const phylloRoutes = require('./routes/phylloRoutes');
+const { subscribe } = require('./utils/sseHub');
+const { protect } = require('./middleware/auth');
 
 // Import models to ensure they're loaded
 require('./models/Image');
@@ -78,6 +81,20 @@ app.use('/api/characters', characterRoutes);
 app.use('/api/images', imageRoutes);
 app.use('/api/avatars', avatarRoutes);
 app.use('/api/videos', videoRoutes);
+app.use('/api/phyllo', phylloRoutes);
+
+// SSE endpoint (authenticated)
+app.get('/api/events', protect, (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+  res.write(`event: ready\n`);
+  res.write(`data: {"ok":true}\n\n`);
+  subscribe(String(req.user._id), res);
+});
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
