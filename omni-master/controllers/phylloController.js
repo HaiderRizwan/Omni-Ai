@@ -3,6 +3,20 @@ const User = require('../models/User');
 
 // Base Phyllo API URL
 const PHYLLO_BASE_URL = process.env.PHYLLO_BASE_URL || 'https://api.getphyllo.com/v1';
+const DEBUG_PHYLLO = String(process.env.DEBUG_PHYLLO || '').toLowerCase() === 'true';
+
+function logDebug(...args) {
+    if (DEBUG_PHYLLO) {
+        try { console.log('[Phyllo]', ...args); } catch (_) {}
+    }
+}
+
+function redact(str) {
+    if (!str) return str;
+    const s = String(str);
+    if (s.length <= 6) return '***';
+    return `${s.slice(0, 3)}***${s.slice(-3)}`;
+}
 
 // Helpers to build auth header for Phyllo
 function getPhylloAuthHeader() {
@@ -14,7 +28,9 @@ function getPhylloAuthHeader() {
 		throw err;
 	}
 	const basic = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
-	return { Authorization: `Basic ${basic}` };
+	const header = { Authorization: `Basic ${basic}` };
+	logDebug('Auth header prepared', { clientId: redact(apiKey), baseUrl: PHYLLO_BASE_URL });
+	return header;
 }
 
 // POST /api/phyllo/users
@@ -36,11 +52,21 @@ const createPhylloUser = async (req, res) => {
 			}
 		}
 
+		logDebug('createPhylloUser → request', {
+			baseUrl: PHYLLO_BASE_URL,
+			payload: { name, external_id: externalId }
+		});
+
 		const response = await axios.post(
 			`${PHYLLO_BASE_URL}/users`,
 			{ name, external_id: externalId },
 			{ headers: { 'Content-Type': 'application/json', ...getPhylloAuthHeader() } }
 		);
+
+		logDebug('createPhylloUser ← response', {
+			status: response.status,
+			dataKeys: Object.keys(response.data || {})
+		});
 
 		const created = response.data;
 		// Persist phylloUserId on our user
@@ -50,6 +76,11 @@ const createPhylloUser = async (req, res) => {
 
 		return res.json({ success: true, user: created });
 	} catch (err) {
+		logDebug('createPhylloUser × error', {
+			status: err.response?.status,
+			data: err.response?.data,
+			message: err.message
+		});
 		// Normalize Phyllo upstream auth errors to avoid confusing 401 in frontend
 		const upstreamStatus = err.response?.status;
 		const upstreamMsg = err.response?.data?.message || err.response?.data?.error;
@@ -68,13 +99,23 @@ const generateSdkToken = async (req, res) => {
 	try {
 		const { userId } = req.body || {};
 		if (!userId) return res.status(400).json({ success: false, message: 'userId is required' });
+		logDebug('generateSdkToken → request', {
+			baseUrl: PHYLLO_BASE_URL,
+			payload: { user_id: userId }
+		});
 		const response = await axios.post(
 			`${PHYLLO_BASE_URL}/sdk-tokens`,
 			{ user_id: userId },
 			{ headers: { 'Content-Type': 'application/json', ...getPhylloAuthHeader() } }
 		);
+		logDebug('generateSdkToken ← response', { status: response.status, dataKeys: Object.keys(response.data || {}) });
 		return res.json({ success: true, token: response.data });
 	} catch (err) {
+		logDebug('generateSdkToken × error', {
+			status: err.response?.status,
+			data: err.response?.data,
+			message: err.message
+		});
 		const upstreamStatus = err.response?.status;
 		const upstreamMsg = err.response?.data?.message || err.response?.data?.error;
 		if (upstreamStatus === 401 || upstreamStatus === 403) {
@@ -131,13 +172,23 @@ const publishContent = async (req, res) => {
 		}
 		// Optional: ensure the account belongs to the authenticated user if auth middleware is used
 		// if (req.user?.phylloUserId) { ... fetch user accounts and verify ... }
+		logDebug('publishContent → request', {
+			baseUrl: PHYLLO_BASE_URL,
+			payload: { account_id: accountId, ...content }
+		});
 		const response = await axios.post(
 			`${PHYLLO_BASE_URL}/publishing/posts`,
 			{ account_id: accountId, ...content },
 			{ headers: { 'Content-Type': 'application/json', ...getPhylloAuthHeader() } }
 		);
+		logDebug('publishContent ← response', { status: response.status, dataKeys: Object.keys(response.data || {}) });
 		return res.json({ success: true, post: response.data });
 	} catch (err) {
+		logDebug('publishContent × error', {
+			status: err.response?.status,
+			data: err.response?.data,
+			message: err.message
+		});
 		return res.status(500).json({ success: false, message: err.message });
 	}
 };
@@ -148,12 +199,19 @@ const listAccounts = async (req, res) => {
 	try {
 		const { phylloUserId } = req.params;
 		if (!phylloUserId) return res.status(400).json({ success: false, message: 'phylloUserId is required' });
+		logDebug('listAccounts → request', { baseUrl: PHYLLO_BASE_URL, phylloUserId });
 		const response = await axios.get(
 			`${PHYLLO_BASE_URL}/users/${phylloUserId}/accounts`,
 			{ headers: { ...getPhylloAuthHeader() } }
 		);
+		logDebug('listAccounts ← response', { status: response.status, keys: Object.keys(response.data || {}) });
 		return res.json({ success: true, accounts: response.data?.data || response.data });
 	} catch (err) {
+		logDebug('listAccounts × error', {
+			status: err.response?.status,
+			data: err.response?.data,
+			message: err.message
+		});
 		return res.status(500).json({ success: false, message: err.message });
 	}
 };

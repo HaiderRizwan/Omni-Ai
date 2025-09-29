@@ -49,6 +49,21 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Optional: trust proxy when tunneling (e.g., ngrok), to ensure correct client IP/rate-limit behavior
+if (String(process.env.TRUST_PROXY || '').toLowerCase() === 'true') {
+  try { app.set('trust proxy', 1); } catch (_) {}
+}
+
+// Optional lightweight request logger for debugging
+if (String(process.env.DEBUG_HTTP || '').toLowerCase() === 'true') {
+  app.use((req, res, next) => {
+    try {
+      console.log(`[HTTP] ${req.method} ${req.originalUrl}`);
+    } catch (_) {}
+    next();
+  });
+}
+
 // Static serving for uploaded files
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

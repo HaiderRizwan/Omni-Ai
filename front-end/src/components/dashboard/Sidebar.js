@@ -180,6 +180,7 @@ const Sidebar = ({
   const startPhylloConnect = async () => {
     try {
       const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      console.log('apiBase ->', apiBase, 'env ->', process.env.REACT_APP_PHYLLO_ENV);
       const phylloUserId = await ensurePhylloUser();
       const tokenRes = await fetch(`${apiBase}/api/phyllo/sdk-token`, {
         method: 'POST',
