@@ -2,45 +2,13 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const SubscriptionPlan = require('../models/SubscriptionPlan');
 
-// Ensure there is at least one active plan; create a default if none
-const ensureDefaultPlan = async () => {
-  console.log('[Subscriptions] ensureDefaultPlan invoked');
-  let plan = await SubscriptionPlan.findOne({ isActive: true }).sort({ sortOrder: 1 });
-  if (plan) return plan;
-
-  // Create a single Pro plan with full access for $35
-  console.log('[Subscriptions] No active plans. Creating single Pro plan...');
-  plan = await SubscriptionPlan.create({
-    name: 'pro',
-    displayName: 'Pro',
-    description: 'Full access plan',
-    price: { monthly: 35, yearly: 420 },
-    currency: 'USD',
-    features: {
-      apiCalls: 1000000,
-      storage: 100000,
-      premiumFeatures: [
-        'advanced_analytics',
-        'unlimited_projects',
-        'priority_support',
-        'custom_integrations',
-        'white_label',
-        'api_access',
-        'export_data',
-        'team_collaboration'
-      ],
-      canCreateTeams: true,
-      canExportData: true,
-      hasPrioritySupport: true,
-      hasAdvancedAnalytics: true,
-      hasApiAccess: true
-    },
-    isActive: true,
-    isPopular: true,
-    sortOrder: 1,
-    trialDays: 14
-  });
-  return plan;
+// Helper to prefer a specific plan by name without creating new ones
+const findPreferredPlan = async (namesInOrder = []) => {
+  for (const name of namesInOrder) {
+    const plan = await SubscriptionPlan.getPlanByName(name);
+    if (plan) return plan;
+  }
+  return null;
 };
 
 // @desc    Get all available subscription plans
@@ -49,16 +17,8 @@ const ensureDefaultPlan = async () => {
 const getSubscriptionPlans = async (req, res) => {
   try {
     console.log('[Subscriptions] getSubscriptionPlans called');
-    let plans = await SubscriptionPlan.getActivePlans();
+    const plans = await SubscriptionPlan.getActivePlans();
     console.log(`[Subscriptions] Active plans found: ${plans.length}`);
-
-    // Auto-create a default plan if none exist (public-safe)
-    if (!plans || plans.length === 0) {
-      console.log('[Subscriptions] No plans on GET. Ensuring single Pro plan...');
-      await ensureDefaultPlan();
-      plans = await SubscriptionPlan.getActivePlans();
-      console.log(`[Subscriptions] Plans after ensure: ${plans.length}`);
-    }
 
     res.status(200).json({
       success: true,
@@ -127,13 +87,20 @@ const startTrial = async (req, res) => {
       });
     }
 
-    // Get or create a plan
+    // Resolve a plan without creating new ones
     let plan;
     if (planId) {
       plan = await SubscriptionPlan.findById(planId);
     }
     if (!plan) {
-      plan = await ensureDefaultPlan();
+      // Prefer plus then pro for trials; avoid free for trials if possible
+      plan = await findPreferredPlan(['plus', 'pro']);
+      if (!plan) {
+        return res.status(400).json({
+          success: false,
+          message: 'No eligible trial plan available. Please contact support.'
+        });
+      }
       planId = plan._id;
     }
     console.log('[Subscriptions] startTrial using plan:', plan?.name, planId?.toString());
@@ -180,13 +147,20 @@ const upgradeSubscription = async (req, res) => {
     console.log('[Subscriptions] upgradeSubscription called by user:', req.user?._id?.toString());
     console.log('[Subscriptions] upgrade incoming planId:', planId, 'billing:', billingCycle);
 
-    // Get or create a plan
+    // Resolve a plan without creating new ones
     let plan;
     if (planId) {
       plan = await SubscriptionPlan.findById(planId);
     }
     if (!plan) {
-      plan = await ensureDefaultPlan();
+      // Prefer pro then plus for upgrade fallback
+      plan = await findPreferredPlan(['pro', 'plus']);
+      if (!plan) {
+        return res.status(400).json({
+          success: false,
+          message: 'No eligible paid plan available. Please contact support.'
+        });
+      }
       planId = plan._id;
     }
     console.log('[Subscriptions] upgrade using plan:', plan?.name, planId?.toString());
@@ -375,6 +349,164 @@ const getUsageStats = async (req, res) => {
   }
 };
 
+// Stripe webhook to finalize subscription after Checkout
+const stripeWebhook = async (req, res) => {
+  try {
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const sig = req.headers['stripe-signature'];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!endpointSecret) {
+      console.error('[Stripe] Missing STRIPE_WEBHOOK_SECRET');
+      return res.status(500).send('Webhook secret not configured');
+    }
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } catch (err) {
+      console.error('[Stripe] Webhook signature verification failed:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const payload = event.data.object;
+        // When available, prefer Checkout Session metadata
+        const isSession = payload.object === 'checkout.session';
+        const metadata = isSession ? (payload.metadata || {}) : {};
+        const userIdStr = (isSession && payload.client_reference_id) ? String(payload.client_reference_id) : null;
+        const planId = metadata.planId || null;
+        const billingCycle = metadata.billingCycle || 'monthly';
+
+        // Resolve user
+        let user = null;
+        if (userIdStr) {
+          user = await User.findById(userIdStr);
+        }
+        // Fallback by email if provided
+        if (!user && metadata.userEmail) {
+          user = await User.findOne({ email: String(metadata.userEmail).toLowerCase() });
+        }
+        if (!user) {
+          console.warn('[Stripe] Webhook: user not found for session, skipping');
+          break;
+        }
+
+        // Resolve plan
+        let plan = null;
+        if (planId) {
+          plan = await SubscriptionPlan.findById(planId);
+        }
+        if (!plan && metadata.planName) {
+          plan = await SubscriptionPlan.getPlanByName(metadata.planName);
+        }
+        if (!plan) {
+          console.warn('[Stripe] Webhook: plan not found, skipping');
+          break;
+        }
+
+        // Upgrade user
+        await user.upgradeSubscription(plan._id, billingCycle);
+
+        // Upsert Subscription record
+        let subscription = await Subscription.findOne({ user: user._id });
+        if (subscription) {
+          subscription.plan = plan._id;
+          subscription.status = 'active';
+          subscription.billingCycle = billingCycle;
+          subscription.currentPeriodStart = new Date();
+          subscription.currentPeriodEnd = user.subscriptionEndDate;
+          await subscription.save();
+        } else {
+          subscription = await Subscription.create({
+            user: user._id,
+            plan: plan._id,
+            status: 'active',
+            billingCycle,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: user.subscriptionEndDate
+          });
+        }
+
+        break;
+      }
+      default:
+        // Ignore other events
+        break;
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook error:', error);
+    res.status(500).send('Server error');
+  }
+};
+
+// Confirm session endpoint for success page fallback
+const confirmSession = async (req, res) => {
+  try {
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const { sessionId } = req.body || {};
+    if (!sessionId) {
+      return res.status(400).json({ success: false, message: 'sessionId is required' });
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!session || session.mode !== 'subscription') {
+      return res.status(400).json({ success: false, message: 'Invalid session' });
+    }
+    if (session.payment_status !== 'paid') {
+      return res.status(400).json({ success: false, message: 'Payment not completed' });
+    }
+
+    const metadata = session.metadata || {};
+    const billingCycle = metadata.billingCycle || 'monthly';
+    let plan = null;
+    if (metadata.planId) {
+      plan = await SubscriptionPlan.findById(metadata.planId);
+    }
+    if (!plan && metadata.planName) {
+      plan = await SubscriptionPlan.getPlanByName(metadata.planName);
+    }
+    if (!plan) {
+      return res.status(400).json({ success: false, message: 'Plan not found for session' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' });
+    }
+
+    await user.upgradeSubscription(plan._id, billingCycle);
+
+    let subscription = await Subscription.findOne({ user: user._id });
+    if (subscription) {
+      subscription.plan = plan._id;
+      subscription.status = 'active';
+      subscription.billingCycle = billingCycle;
+      subscription.currentPeriodStart = new Date();
+      subscription.currentPeriodEnd = user.subscriptionEndDate;
+      await subscription.save();
+    } else {
+      subscription = await Subscription.create({
+        user: user._id,
+        plan: plan._id,
+        status: 'active',
+        billingCycle,
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: user.subscriptionEndDate
+      });
+    }
+
+    res.status(200).json({ success: true, message: 'Subscription confirmed', data: { subscription, user } });
+  } catch (error) {
+    console.error('Confirm session error:', error);
+    res.status(500).json({ success: false, message: 'Failed to confirm subscription', error: error.message });
+  }
+};
+
 // @desc    Create or update subscription plan (Admin only)
 // @route   POST /api/subscriptions/plans
 // @access  Private/Admin
@@ -481,6 +613,67 @@ const deleteSubscriptionPlan = async (req, res) => {
   }
 };
 
+// @desc    Create Stripe Checkout session for a subscription plan
+// @route   POST /api/subscriptions/checkout-session
+// @access  Public (or Private if you want to require login)
+const createStripeCheckoutSession = async (req, res) => {
+  try {
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const { planId, billingCycle = 'monthly', successUrl, cancelUrl, email } = req.body;
+    if (!planId) {
+      return res.status(400).json({ success: false, message: 'planId is required' });
+    }
+    // Resolve the plan: accept ObjectId or name (with aliases)
+    const SubscriptionPlanModel = require('../models/SubscriptionPlan');
+    let plan = null;
+    const toLower = String(planId).toLowerCase();
+    const isLikelyObjectId = typeof planId === 'string' && /^[a-f\d]{24}$/.test(planId);
+    if (isLikelyObjectId) {
+      plan = await SubscriptionPlanModel.findById(planId);
+    }
+    if (!plan) {
+      // Allow names and common aliases from UI
+      const aliasMap = { plus: 'starter', pro: 'professional' };
+      const nameToFind = aliasMap[toLower] || toLower;
+      plan = await SubscriptionPlanModel.findOne({ name: nameToFind, isActive: true });
+    }
+    if (!plan) {
+      return res.status(404).json({ success: false, message: 'Plan not found' });
+    }
+    // Get the Stripe price ID
+    const priceId = plan.stripePriceId && plan.stripePriceId[billingCycle];
+    if (!priceId) {
+      return res.status(400).json({ success: false, message: 'Stripe price ID not set for this plan/cycle' });
+    }
+    // Create the Stripe Checkout session
+    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      customer_email: email, // Optional: prefill email
+      success_url: successUrl || `${frontendBase}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${frontendBase}/cancel`,
+      client_reference_id: (req.user && req.user._id) ? String(req.user._id) : undefined,
+      metadata: {
+        planId: String(plan._id),
+        planName: plan.name,
+        billingCycle,
+        userEmail: email || '',
+      }
+    });
+    return res.status(200).json({ success: true, url: session.url });
+  } catch (error) {
+    console.error('Stripe Checkout session error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create Stripe Checkout session', error: error.message });
+  }
+};
+
 module.exports = {
   getSubscriptionPlans,
   getSubscriptionStatus,
@@ -492,5 +685,8 @@ module.exports = {
   getUsageStats,
   createSubscriptionPlan,
   updateSubscriptionPlan,
-  deleteSubscriptionPlan
+  deleteSubscriptionPlan,
+  createStripeCheckoutSession,
+  stripeWebhook,
+  confirmSession,
 };

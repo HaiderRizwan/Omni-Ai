@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Check, ExternalLink, X } from 'lucide-react';
+import PlanModal from './PlanModal';
 
-const SettingsPage = ({ isOpen, onClose, user }) => {
+const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
   const { theme, changeTheme, isDark, isRed } = useTheme();
   const [publishToExplore, setPublishToExplore] = useState(false);
   const [improveModel, setImproveModel] = useState(false);
   const [activeSection, setActiveSection] = useState('general');
+  const [showPlanModal, setShowPlanModal] = useState(false);
 
   const ToggleSwitch = ({ isOn, onToggle, disabled = false }) => (
     <motion.button
@@ -259,7 +261,7 @@ const SettingsPage = ({ isOpen, onClose, user }) => {
         const isSubscribed = user?.subscriptionStatus === 'active';
         const isOnTrial = user?.subscriptionStatus === 'trial';
         const isFree = user?.subscriptionStatus === 'free' || !user?.subscriptionStatus;
-        
+        let currentPlan = isSubscribed ? 'pro' : isOnTrial ? 'plus' : 'free';
         return (
           <div className="space-y-6">
             <div>
@@ -284,6 +286,12 @@ const SettingsPage = ({ isOpen, onClose, user }) => {
                     {isSubscribed ? 'Pro' : isOnTrial ? 'Trial' : 'Free'}
                   </span>
                 </div>
+                <button
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  onClick={onShowPlanModal}
+                >
+                  Manage Plan
+                </button>
                 
                 {!isSubscribed && (
                   <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">

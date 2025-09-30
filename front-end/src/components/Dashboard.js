@@ -8,6 +8,7 @@ import TopNavbar from './dashboard/TopNavbar';
 import SettingsPage from './dashboard/SettingsPage';
 import { useAllChatHistories, chatHistoryManager } from './dashboard/ChatHistory';
 import safeLocalStorage from '../utils/localStorage';
+import PlanModal from './dashboard/PlanModal';
 
 function Dashboard({ user, onLogout }) {
   const [currentUser, setCurrentUser] = useState(user);
@@ -19,6 +20,9 @@ function Dashboard({ user, onLogout }) {
   const [showAvatarGallery, setShowAvatarGallery] = useState(false);
   const [avatarCollection, setAvatarCollection] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [availablePlans, setAvailablePlans] = useState([]);
+  const [currentPlanAlias, setCurrentPlanAlias] = useState('free');
 
   // Handler for adding avatars to collection
   const handleAddToCollection = (avatar, isAdded) => {
@@ -86,6 +90,7 @@ function Dashboard({ user, onLogout }) {
         // Sort chats by createdAt (newest first) to match backend order
         const sortedChats = json.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         console.log('[Dashboard] Refreshing server chats:', sortedChats.length, 'chats');
+        console.log('[Dashboard] Server chats data:', sortedChats.map(c => ({ id: c._id, title: c.title, chatType: c.chatType, createdAt: c.createdAt })));
         setServerChats(sortedChats);
       }
     } catch (error) {
@@ -93,11 +98,127 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  // Load available subscription plans for mapping plan ids to names
+  const loadPlans = async () => {
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiBase}/api/subscriptions/plans`);
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.data)) {
+        setAvailablePlans(json.data);
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error loading plans:', error);
+    }
+  };
+
+  // Function to manually clean up duplicate chats
+  const cleanupDuplicates = () => {
+    console.log('[Dashboard] Manual cleanup of duplicate chats initiated');
+    chatHistoryManager.removeAllDuplicates();
+    refreshHistories();
+    console.log('[Dashboard] Duplicate cleanup completed');
+  };
+
   // Load server chats on mount
   useEffect(() => {
     loadServerChats();
     loadUserAvatars();
+    loadPlans();
+    // Remove any existing duplicates from local storage
+    chatHistoryManager.removeAllDuplicates();
+    
+    // Expose cleanup function globally for debugging
+    window.cleanupDuplicateChats = cleanupDuplicates;
   }, []);
+
+  // Detect Stripe checkout redirect and confirm session with backend
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    if (!sessionId) return;
+
+    const confirmSubscription = async () => {
+      try {
+        const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+        const token = safeLocalStorage.getItem('token');
+        const res = await fetch(`${apiBase}/api/subscriptions/confirm-session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ sessionId })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json?.success) {
+          const updatedUser = json?.data?.user;
+          if (updatedUser) {
+            setCurrentUser(updatedUser);
+            safeLocalStorage.setItem('user', JSON.stringify(updatedUser));
+          }
+        } else {
+          console.warn('[Dashboard] Failed to confirm Stripe session:', json?.message || res.status);
+        }
+      } catch (err) {
+        console.error('[Dashboard] Error confirming Stripe session:', err);
+      } finally {
+        // Clean the URL by removing session_id to avoid re-confirming on refresh
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('session_id');
+          window.history.replaceState({}, document.title, url.toString());
+        } catch (_) {}
+      }
+    };
+
+    confirmSubscription();
+  }, []);
+
+  // Map backend plan to frontend alias used by PlanModal: starter->plus, professional->pro, else free
+  useEffect(() => {
+    try {
+      const planId = currentUser?.subscriptionPlan;
+      let planName = null;
+      if (!planId) {
+        // If no plan id but user is not free, default to plus
+        if (currentUser?.subscriptionStatus && currentUser.subscriptionStatus !== 'free') {
+          setCurrentPlanAlias('plus');
+          return;
+        } else {
+          setCurrentPlanAlias('free');
+          return;
+        }
+      }
+
+      // If subscriptionPlan is populated object with name
+      if (typeof planId === 'object' && planId?.name) {
+        planName = String(planId.name).toLowerCase();
+      } else {
+        // Find by _id in availablePlans
+        const found = availablePlans.find(p => String(p._id) === String(planId));
+        planName = found ? String(found.name).toLowerCase() : null;
+      }
+
+      if (!planName) {
+        // Fallback: for any non-free status, assume plus unless specified otherwise
+        if (currentUser?.subscriptionStatus && currentUser.subscriptionStatus !== 'free') {
+          setCurrentPlanAlias('plus');
+          return;
+        }
+        setCurrentPlanAlias('free');
+        return;
+      }
+
+      if (planName === 'starter') setCurrentPlanAlias('plus');
+      else if (planName === 'professional') setCurrentPlanAlias('pro');
+      else setCurrentPlanAlias('free');
+    } catch (e) {
+      console.warn('[Dashboard] Error mapping current plan alias:', e);
+      setCurrentPlanAlias('free');
+    }
+  }, [currentUser, availablePlans]);
 
   // Reconcile server chats into local cache so sidebar shows them
   // Filter chats by type and add them to the correct tool history
@@ -146,18 +267,28 @@ function Dashboard({ user, onLogout }) {
               });
               mutated = true;
             } else {
-              // Create a new chat entry
-              console.log(`[Reconciliation] Adding new server chat to local history: ${sid} (${serverType})`, {
-                title: c.title,
-                timestamp: new Date(c.createdAt || Date.now()).getTime()
-              });
-              chatHistoryManager.addChat(toolId, {
-                title: c.title || 'New Chat',
-                messages: [],
-                serverId: sid,
-                timestamp: new Date(c.createdAt || Date.now()).getTime()
-              });
-              mutated = true;
+              // Create a new chat entry only if it doesn't already exist
+              const existingChat = existing.find(existingChat => 
+                existingChat.serverId === sid || 
+                (existingChat.title === c.title && 
+                 Math.abs(new Date(existingChat.timestamp).getTime() - new Date(c.createdAt || Date.now()).getTime()) < 60000)
+              );
+              
+              if (!existingChat) {
+                console.log(`[Reconciliation] Adding new server chat to local history: ${sid} (${serverType})`, {
+                  title: c.title,
+                  timestamp: new Date(c.createdAt || Date.now()).getTime()
+                });
+                chatHistoryManager.addChat(toolId, {
+                  title: c.title || 'New Chat',
+                  messages: [],
+                  serverId: sid,
+                  timestamp: new Date(c.createdAt || Date.now()).getTime()
+                });
+                mutated = true;
+              } else {
+                console.log(`[Reconciliation] Chat already exists, skipping: ${sid} (${serverType})`);
+              }
             }
           } else {
             console.log(`Server chat already exists in local history: ${sid} (${serverType})`);
@@ -369,6 +500,31 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  // Plan modal logic
+  const refreshUserProfile = async () => {
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const token = safeLocalStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`${apiBase}/api/users/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.success && json.data) {
+        setCurrentUser(json.data);
+        safeLocalStorage.setItem('user', JSON.stringify(json.data));
+      }
+    } catch (e) {
+      console.warn('[Dashboard] Failed to refresh user profile:', e);
+    }
+  };
+
+  const handleShowPlanModal = async () => {
+    await refreshUserProfile();
+    setShowPlanModal(true);
+  };
+  const handleClosePlanModal = () => setShowPlanModal(false);
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white flex">
@@ -417,6 +573,43 @@ function Dashboard({ user, onLogout }) {
         isOpen={showSettings} 
         onClose={handleBackFromSettings}
         user={currentUser}
+        onShowPlanModal={handleShowPlanModal}
+      />
+      {/* Plan Modal rendered at root level */}
+      <PlanModal
+        isOpen={showPlanModal}
+        onClose={handleClosePlanModal}
+        currentPlan={currentPlanAlias}
+        onSelectPlan={async (planId) => {
+          try {
+            if (planId === 'free') {
+              setShowPlanModal(false);
+              return;
+            }
+            const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+            const token = safeLocalStorage.getItem('token');
+            const res = await fetch(`${apiBase}/api/subscriptions/checkout-session`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify({
+                planId,
+                billingCycle: 'monthly',
+                email: currentUser?.email || undefined
+              }),
+            });
+            const data = await res.json();
+            if (data.success && data.url) {
+              window.location.href = data.url;
+            } else {
+              alert(data.message || 'Failed to start checkout');
+            }
+          } catch (err) {
+            alert('Error starting checkout: ' + err.message);
+          }
+        }}
       />
     </div>
   );

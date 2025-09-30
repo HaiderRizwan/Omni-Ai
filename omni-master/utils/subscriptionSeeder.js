@@ -106,8 +106,8 @@ const defaultPlans = [
     },
     currency: 'USD',
     features: {
-      apiCalls: -1, // Unlimited
-      storage: -1,  // Unlimited
+      apiCalls: 1000000, // Practically unlimited within validations
+      storage: 100000,   // Practically unlimited within validations
       premiumFeatures: [
         'currency_converter',
         'document_converter',

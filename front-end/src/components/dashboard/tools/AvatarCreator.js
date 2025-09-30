@@ -40,6 +40,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
   });
   const [generationMode, setGenerationMode] = useState('text'); // 'text' or 'image'
   const [uploadedImage, setUploadedImage] = useState(null);
+  const lastChatIdRef = useRef(null);
 
   // Debug: Monitor generatedAvatar state changes
   useEffect(() => {
@@ -48,69 +49,26 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
   // Sync local messages with incoming chat (same as ImageCreator)
   useEffect(() => {
-    if (currentChat && Array.isArray(currentChat.messages)) {
-      console.log('Loading avatar chat messages:', currentChat.messages.length, 'messages');
-      console.log('Current chat serverId:', currentChat.serverId || currentChat._id);
-      
-      // Transform server-loaded messages: check for avatar property
+    const chatId = currentChat?.id || currentChat?._id || currentChat?.serverId;
+    if (chatId !== lastChatIdRef.current) {
+      // Chat switched, reset messages
+      lastChatIdRef.current = chatId;
+      if (currentChat && Array.isArray(currentChat.messages)) {
+        const transformed = currentChat.messages.map((m, index) => {
+          const messageType = m.type || (m.role === 'user' ? 'user' : 'assistant');
+          return { ...m, type: messageType, avatar: m.avatar };
+        });
+        setMessages(transformed);
+      } else {
+        setMessages([]);
+      }
+    } else if (currentChat && Array.isArray(currentChat.messages) && currentChat.messages.length > 0) {
+      // Chat id is the same, but messages updated (e.g. after avatar generation)
       const transformed = currentChat.messages.map((m, index) => {
-        console.log(`Avatar message ${index}:`, { 
-          type: m.type, 
-          role: m.role,
-          content: m.content, 
-          hasAvatar: !!m.avatar,
-          avatar: m.avatar
-        });
-        
-        // Handle both local format (type) and server format (role)
         const messageType = m.type || (m.role === 'user' ? 'user' : 'assistant');
-        
-        // Check if message has avatar property from backend
-        console.log(`Checking message ${index} for avatar:`, {
-          hasM: !!m,
-          hasAvatar: !!m.avatar,
-          avatarValue: m.avatar,
-          avatarType: typeof m.avatar,
-          allKeys: Object.keys(m || {})
-        });
-        
-        if (m && m.avatar) {
-          console.log(`Message ${index} has avatar from backend:`, m.avatar);
-          
-          // Test if the stored avatar URL is still accessible
-          if (m.avatar.startsWith('http')) {
-            fetch(m.avatar, { method: 'HEAD' })
-              .then(testRes => {
-                console.log(`Avatar URL test for message ${index}:`, testRes.status, testRes.ok ? 'SUCCESS' : 'FAILED');
-              })
-              .catch(err => {
-                console.error(`Avatar URL test failed for message ${index}:`, err);
-              });
-          }
-          
-          return { 
-            ...m, 
-            type: messageType,
-            avatar: m.avatar // Explicitly preserve avatar field
-          };
-        }
-        
-        // Debug: Log all message properties to see what's available
-        console.log(`Message ${index} full object:`, m);
-        
-        return { 
-          ...m, 
-          type: messageType,
-          avatar: m.avatar // Explicitly preserve avatar field
-        };
+        return { ...m, type: messageType, avatar: m.avatar };
       });
-      
-      console.log('Transformed avatar messages:', transformed);
-      console.log('Final messages with avatars:', transformed.filter(m => m.avatar));
       setMessages(transformed);
-    } else {
-      console.log('No chat or empty messages, clearing');
-      setMessages([]);
     }
   }, [currentChat?.messages, currentChat?.id, currentChat?.serverId]);
 
@@ -255,7 +213,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
   const handleGenerate = async () => {
     if (generationMode === 'text' && !prompt.trim()) return;
     if (generationMode === 'image' && !uploadedImage) return;
-
+    setPrompt('');
     setIsGenerating(true);
     
     try {

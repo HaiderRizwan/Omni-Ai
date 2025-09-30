@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import FormattedMessage from '../ui/FormattedMessage';
 import { motion } from 'framer-motion';
 import safeLocalStorage from '../../../utils/localStorage';
@@ -30,9 +30,36 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
   });
   const [showSettings, setShowSettings] = useState(false);
   const videoRef = useRef(null);
+  const lastChatIdRef = useRef(null);
+  const [messages, setMessages] = useState([]);
+
+  useEffect(() => {
+    const chatId = currentChat?.id || currentChat?._id || currentChat?.serverId;
+    if (chatId !== lastChatIdRef.current) {
+      // Chat switched, reset messages
+      lastChatIdRef.current = chatId;
+      if (currentChat && Array.isArray(currentChat.messages)) {
+        const transformed = currentChat.messages.map((m, index) => {
+          const messageType = m.type || (m.role === 'user' ? 'user' : 'assistant');
+          return { ...m, type: messageType, video: m.video };
+        });
+        setMessages(transformed);
+      } else {
+        setMessages([]);
+      }
+    } else if (currentChat && Array.isArray(currentChat.messages) && currentChat.messages.length > 0) {
+      // Chat id is the same, but messages updated (e.g. after video generation)
+      const transformed = currentChat.messages.map((m, index) => {
+        const messageType = m.type || (m.role === 'user' ? 'user' : 'assistant');
+        return { ...m, type: messageType, video: m.video };
+      });
+      setMessages(transformed);
+    }
+  }, [currentChat?.messages, currentChat?.id, currentChat?.serverId]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    setPrompt('');
 
     setIsGenerating(true);
 
@@ -386,9 +413,9 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
         <div className="flex-1 flex flex-col">
           {/* Messages */}
           <div className="flex-1 p-6 overflow-y-auto">
-            {currentChat?.messages?.length > 0 ? (
+            {messages?.length > 0 ? (
               <div className="space-y-4">
-                {currentChat.messages.map((message, index) => (
+                {messages.map((message, index) => (
                   <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-2xl p-4 rounded-2xl ${
                       message.type === 'user' 

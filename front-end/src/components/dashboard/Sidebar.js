@@ -69,28 +69,11 @@ const Sidebar = ({
       const data = await response.json();
 
       if (data.success && data.data) {
-        const { hasActiveSubscription, isTrialActive, subscriptionStatus: backendStatus } = data.data;
-        
-        if (hasActiveSubscription) {
-          if (isTrialActive) {
-            setSubscriptionStatus('trial');
-            // Update user object if callback is provided
-            if (onUserUpdate && user) {
-              onUserUpdate({ ...user, subscriptionStatus: 'trial' });
-            }
-          } else {
-            setSubscriptionStatus('active');
-            // Update user object if callback is provided
-            if (onUserUpdate && user) {
-              onUserUpdate({ ...user, subscriptionStatus: 'active' });
-            }
-          }
-        } else {
-          setSubscriptionStatus('free');
-          // Update user object if callback is provided
-          if (onUserUpdate && user) {
-            onUserUpdate({ ...user, subscriptionStatus: 'free' });
-          }
+        const { subscriptionStatus: backendStatus } = data.data;
+        const normalized = ['free','trial','active','expired','cancelled'].includes(backendStatus) ? backendStatus : 'free';
+        setSubscriptionStatus(normalized);
+        if (onUserUpdate && user) {
+          onUserUpdate({ ...user, subscriptionStatus: normalized });
         }
       } else {
         setSubscriptionStatus('free');

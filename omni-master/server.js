@@ -46,7 +46,13 @@ app.use(cors({
   credentials: true,
   exposedHeaders: ['X-Image-Id', 'Content-Type', 'Content-Length']
 }));
-app.use(express.json({ limit: '10mb' }));
+// Stripe webhook needs raw body; add conditional raw handler for that route
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/subscriptions/webhook') {
+    return express.raw({ type: 'application/json' })(req, res, next);
+  }
+  return express.json({ limit: '10mb' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true }));
 
 // Optional: trust proxy when tunneling (e.g., ngrok), to ensure correct client IP/rate-limit behavior
@@ -89,6 +95,9 @@ app.use(limiter);
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+// Mount webhook after json/raw middleware
+const { stripeWebhook } = require('./controllers/subscriptionController');
+app.post('/api/subscriptions/webhook', stripeWebhook);
 app.use('/api/currency', currencyRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/chat', chatRoutes);

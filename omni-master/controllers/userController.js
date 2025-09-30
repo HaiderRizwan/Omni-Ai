@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const SubscriptionPlan = require('../models/SubscriptionPlan'); // Add this at the top
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -24,13 +25,17 @@ const registerUser = async (req, res) => {
       });
     }
 
-    // Create user
+    // Find the free plan
+    const freePlan = await SubscriptionPlan.findOne({ name: 'free', isActive: true });
+
+    // Create user with free plan as default
     const user = await User.create({
       username,
       email,
       password,
       firstName,
-      lastName
+      lastName,
+      subscriptionPlan: freePlan ? freePlan._id : null // assign free plan if found
     });
 
     // Generate token

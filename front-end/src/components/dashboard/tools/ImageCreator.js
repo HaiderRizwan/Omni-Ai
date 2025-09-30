@@ -25,6 +25,7 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
   const [showSettings, setShowSettings] = useState(false); // no header panel; inline controls used
   const pollingRef = useRef(null);
   const isMountedRef = useRef(true);
+  const lastChatIdRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -40,74 +41,32 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
 
   // Sync local messages with incoming chat (same as AvatarCreator)
   useEffect(() => {
-    if (currentChat && Array.isArray(currentChat.messages)) {
-      console.log('Loading image chat messages:', currentChat.messages.length, 'messages');
-      console.log('Current chat serverId:', currentChat.serverId || currentChat._id);
-      
-      // Transform server-loaded messages: check for image property
+    const chatId = currentChat?.id || currentChat?._id || currentChat?.serverId;
+    if (chatId !== lastChatIdRef.current) {
+      // Chat switched, reset messages
+      lastChatIdRef.current = chatId;
+      if (currentChat && Array.isArray(currentChat.messages)) {
+        const transformed = currentChat.messages.map((m, index) => {
+          const messageType = m.type || (m.role === 'user' ? 'user' : 'assistant');
+          return { ...m, type: messageType, image: m.image };
+        });
+        setMessages(transformed);
+      } else {
+        setMessages([]);
+      }
+    } else if (currentChat && Array.isArray(currentChat.messages) && currentChat.messages.length > 0) {
+      // Chat id is the same, but messages updated (e.g. after image generation)
       const transformed = currentChat.messages.map((m, index) => {
-        console.log(`Image message ${index}:`, { 
-          type: m.type, 
-          role: m.role,
-          content: m.content, 
-          hasImage: !!m.image,
-          image: m.image
-        });
-        
-        // Handle both local format (type) and server format (role)
         const messageType = m.type || (m.role === 'user' ? 'user' : 'assistant');
-        
-        // Check if message has image property from backend
-        console.log(`Checking message ${index} for image:`, {
-          hasM: !!m,
-          hasImage: !!m.image,
-          imageValue: m.image,
-          imageType: typeof m.image,
-          allKeys: Object.keys(m || {})
-        });
-        
-        if (m && m.image) {
-          console.log(`Message ${index} has image from backend:`, m.image);
-          
-          // Test if the stored image URL is still accessible
-          if (m.image.startsWith('http')) {
-            fetch(m.image, { method: 'HEAD' })
-              .then(testRes => {
-                console.log(`Image URL test for message ${index}:`, testRes.status, testRes.ok ? 'SUCCESS' : 'FAILED');
-              })
-              .catch(err => {
-                console.error(`Image URL test failed for message ${index}:`, err);
-              });
-          }
-          
-          return { 
-            ...m, 
-            type: messageType,
-            image: m.image // Explicitly preserve image field
-          };
-        }
-        
-        // Debug: Log all message properties to see what's available
-        console.log(`Message ${index} full object:`, m);
-        
-            return { 
-              ...m, 
-              type: messageType,
-          image: m.image // Explicitly preserve image field
-            };
+        return { ...m, type: messageType, image: m.image };
       });
-      
-      console.log('Transformed image messages:', transformed);
-      console.log('Final messages with images:', transformed.filter(m => m.image));
       setMessages(transformed);
-    } else {
-      console.log('No chat or empty messages, clearing');
-      setMessages([]);
     }
   }, [currentChat?.messages, currentChat?.id, currentChat?.serverId]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    setPrompt('');
     
     setIsGenerating(true);
     

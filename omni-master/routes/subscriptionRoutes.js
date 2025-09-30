@@ -11,8 +11,10 @@ const {
   getUsageStats,
   createSubscriptionPlan,
   updateSubscriptionPlan,
-  deleteSubscriptionPlan
+  deleteSubscriptionPlan,
+  createStripeCheckoutSession
 } = require('../controllers/subscriptionController');
+const { stripeWebhook, confirmSession } = require('../controllers/subscriptionController');
 
 // Import middleware
 const { protect, authorize } = require('../middleware/auth');
@@ -21,6 +23,8 @@ const { validateStartTrial, validateUpgradeSubscription, validateCancelSubscript
 
 // Public routes
 router.get('/plans', getSubscriptionPlans);
+router.post('/checkout-session', createStripeCheckoutSession);
+// Stripe requires raw body for signature verification; route is mounted in server.js
 
 // Protected routes (require authentication)
 router.use(protect);
@@ -37,6 +41,7 @@ router.post('/start-trial', canStartTrial, validateStartTrial, startTrial);
 router.post('/upgrade', validateUpgradeSubscription, upgradeSubscription);
 router.post('/cancel', validateCancelSubscription, cancelSubscription);
 router.post('/reactivate', reactivateSubscription);
+router.post('/confirm-session', confirmSession);
 
 // Admin only routes
 router.post('/plans', authorize('admin'), validateCreateSubscriptionPlan, createSubscriptionPlan);

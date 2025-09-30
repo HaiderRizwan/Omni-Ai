@@ -50,6 +50,28 @@ class ChatHistoryManager {
   // Add new chat to history
   addChat(toolId, chatData) {
     const history = this.getHistory(toolId);
+    
+    // Check if a chat with the same serverId already exists
+    if (chatData.serverId) {
+      const existingChat = history.find(chat => chat.serverId === chatData.serverId);
+      if (existingChat) {
+        console.log(`[ChatHistory] Chat with serverId ${chatData.serverId} already exists, skipping add`);
+        return existingChat;
+      }
+    }
+    
+    // Check if a chat with the same title and timestamp already exists (within 1 minute)
+    if (chatData.title && chatData.timestamp) {
+      const existingChat = history.find(chat => 
+        chat.title === chatData.title && 
+        Math.abs(chat.timestamp - chatData.timestamp) < 60000 // Within 1 minute
+      );
+      if (existingChat) {
+        console.log(`[ChatHistory] Chat with title "${chatData.title}" and similar timestamp already exists, skipping add`);
+        return existingChat;
+      }
+    }
+    
     const newChat = {
       id: Date.now().toString(),
       timestamp: Date.now(),
@@ -61,6 +83,8 @@ class ChatHistoryManager {
     
     const updatedHistory = [newChat, ...history].slice(0, 50); // Keep last 50 chats
     this.saveHistory(toolId, updatedHistory);
+    // Remove duplicates after adding
+    this.removeDuplicates(toolId);
     return newChat;
   }
 
@@ -71,6 +95,8 @@ class ChatHistoryManager {
       chat.id === chatId ? { ...chat, ...updates } : chat
     );
     this.saveHistory(toolId, updatedHistory);
+    // Remove duplicates after updating
+    this.removeDuplicates(toolId);
   }
 
   // Delete chat
@@ -95,6 +121,39 @@ class ChatHistoryManager {
   clearAllHistories() {
     Object.keys(this.storageKeys).forEach(toolId => {
       this.clearHistory(toolId);
+    });
+  }
+
+  // Remove duplicate chats from history
+  removeDuplicates(toolId) {
+    const history = this.getHistory(toolId);
+    const seen = new Set();
+    const uniqueHistory = [];
+    
+    for (const chat of history) {
+      // Create a unique key based on serverId or title+timestamp
+      const key = chat.serverId || `${chat.title}-${Math.floor(chat.timestamp / 60000)}`; // Group by minute
+      
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueHistory.push(chat);
+      } else {
+        console.log(`[ChatHistory] Removing duplicate chat: ${chat.title} (${chat.serverId || 'no serverId'})`);
+      }
+    }
+    
+    if (uniqueHistory.length !== history.length) {
+      console.log(`[ChatHistory] Removed ${history.length - uniqueHistory.length} duplicate chats from ${toolId}`);
+      this.saveHistory(toolId, uniqueHistory);
+    }
+    
+    return uniqueHistory;
+  }
+
+  // Remove duplicates from all histories
+  removeAllDuplicates() {
+    Object.keys(this.storageKeys).forEach(toolId => {
+      this.removeDuplicates(toolId);
     });
   }
 }
