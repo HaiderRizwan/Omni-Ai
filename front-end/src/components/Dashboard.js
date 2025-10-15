@@ -470,16 +470,20 @@ function Dashboard({ user, onLogout }) {
       
       console.log('Updated chat:', updatedChat);
       
-      // If the chat got a serverId, refresh server chats to ensure latest data
+      // If the chat got a serverId, add it to the serverChats state to avoid race conditions
       if (updates.serverId && !currentChat.serverId) {
-        console.log('Chat got serverId, refreshing server chats');
-        console.log('Previous serverId:', currentChat.serverId);
-        console.log('New serverId:', updates.serverId);
-        // Refresh server chats from backend to get the latest data
-        loadServerChats();
+        const newServerChat = {
+          _id: updates.serverId,
+          title: updatedChat.title,
+          chatType: activeTool === 'chat' ? 'text' : activeTool,
+          createdAt: new Date().toISOString()
+        };
+        setServerChats(prev => [newServerChat, ...prev]);
       }
     } else if (updates.serverId) {
-      // Create new chat when there's no currentChat but we have a serverId
+      // This case handles chat creation when there is no currentChat.
+      // It's important for scenarios where a chat is initiated from the server side
+      // or if the local state was cleared.
       const newChat = {
         id: updates.id || Date.now().toString(),
         serverId: updates.serverId,
@@ -488,15 +492,19 @@ function Dashboard({ user, onLogout }) {
         timestamp: Date.now()
       };
       
-      console.log('Creating new chat with serverId:', newChat);
-      
-      // Add to local history
+      // Add to local history and set as current
       chatHistoryManager.addChat(activeTool, newChat);
       setCurrentChat(newChat);
       refreshHistories();
       
-      // Refresh server chats to ensure latest data
-      loadServerChats();
+      // Also add to serverChats state to keep it in sync
+      const newServerChat = {
+        _id: updates.serverId,
+        title: newChat.title,
+        chatType: activeTool === 'chat' ? 'text' : activeTool,
+        createdAt: new Date().toISOString()
+      };
+      setServerChats(prev => [newServerChat, ...prev]);
     }
   };
 

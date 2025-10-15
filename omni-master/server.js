@@ -17,10 +17,12 @@ const currencyRoutes = require('./routes/currencyRoutes');
 const documentRoutes = require('./routes/documentRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const characterRoutes = require('./routes/characterRoutes');
+const authRoutes = require('./routes/authRoutes');
 const imageRoutes = require('./routes/imageRoutes');
 const avatarRoutes = require('./routes/avatarRoutes');
 const videoRoutes = require('./routes/videoRoutes');
 const phylloRoutes = require('./routes/phylloRoutes');
+const socialRoutes = require('./routes/socialRoutes');
 const { subscribe } = require('./utils/sseHub');
 const { protect } = require('./middleware/auth');
 
@@ -106,6 +108,8 @@ app.use('/api/images', imageRoutes);
 app.use('/api/avatars', avatarRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/phyllo', phylloRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/socials', socialRoutes);
 
 // SSE endpoint (authenticated)
 app.get('/api/events', protect, (req, res) => {

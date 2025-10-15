@@ -12,6 +12,7 @@ import ExploreGallery from './tools/exploregallery';
 import AvatarGallery from './tools/Avatarsgallery';
 import VideoGallery from './tools/VideoGallery';
 import CurrencyConverter from '../../components/CurrencyConverter';
+import SocialUpload from './tools/SocialUpload';
 
 const MainPanel = ({ 
   activeTool, 
@@ -32,7 +33,8 @@ const MainPanel = ({
     explore: ExploreGallery,
     avatarsGallery: AvatarGallery,
     videoGallery: VideoGallery,
-    currency: CurrencyConverter
+    currency: CurrencyConverter,
+    socialUpload: SocialUpload
   };
 
   const toolVariants = {

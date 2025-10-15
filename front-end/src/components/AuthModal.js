@@ -84,6 +84,21 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
     setFormData({ email: '', password: '', confirmPassword: '', name: '' });
   };
 
+  const handleGoogleLogin = async () => {
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiBase}/api/auth/google/url`);
+      const data = await res.json();
+      if (data && data.success && data.url) {
+        window.location.href = data.url;
+      } else {
+        try { (window.__toast?.push || (()=>{}))({ message: 'Failed to start Google login', type: 'error' }); } catch(_) {}
+      }
+    } catch (e) {
+      try { (window.__toast?.push || (()=>{}))({ message: 'Network error. Please try again.', type: 'error' }); } catch(_) {}
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -245,7 +260,18 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
               </form>
 
               {/* Footer */}
-              <div className="mt-6 text-center">
+              <div className="mt-6">
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 py-3 font-semibold text-white transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
+                    Continue with Google
+                  </button>
+                )}
+                <div className="text-center">
                 <p className="text-sm text-white/60">
                   {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
                   <button
@@ -255,6 +281,7 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
                     {mode === 'login' ? 'Sign up' : 'Sign in'}
                   </button>
                 </p>
+                </div>
               </div>
             </div>
           </motion.div>

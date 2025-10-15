@@ -1,23 +1,57 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useTheme } from '../../contexts/ThemeContext';
-import { Check, ExternalLink, X } from 'lucide-react';
-import PlanModal from './PlanModal';
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useTheme } from "../../contexts/ThemeContext";
+import { Check, ExternalLink, X } from "lucide-react";
+import PlanModal from "./PlanModal";
+import safeLocalStorage from "../../utils/localStorage";
 
 const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
   const { theme, changeTheme, isDark, isRed } = useTheme();
   const [publishToExplore, setPublishToExplore] = useState(false);
   const [improveModel, setImproveModel] = useState(false);
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState("general");
   const [showPlanModal, setShowPlanModal] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setPublishToExplore(user.shareImagesPublicly || false);
+    }
+  }, [user]);
+
+  const handleSharePubliclyToggle = async () => {
+    const newValue = !publishToExplore;
+    setPublishToExplore(newValue);
+
+    try {
+      const apiBase = process.env.REACT_APP_API_URL || "http://localhost:3001";
+      const token = safeLocalStorage.getItem("token");
+      const res = await fetch(`${apiBase}/api/users/settings`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ shareImagesPublicly: newValue }),
+      });
+
+      if (!res.ok) {
+        setPublishToExplore(!newValue);
+        // TODO: show toast error
+      }
+    } catch (error) {
+      console.error("Failed to update settings", error);
+      setPublishToExplore(!newValue);
+      // TODO: show toast error
+    }
+  };
 
   const ToggleSwitch = ({ isOn, onToggle, disabled = false }) => (
     <motion.button
       onClick={onToggle}
       disabled={disabled}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-        isOn ? 'bg-red-600' : 'bg-gray-600'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        isOn ? "bg-red-600" : "bg-gray-600"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
       whileTap={{ scale: 0.95 }}
     >
       <motion.span
@@ -28,12 +62,11 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
         transition={{
           type: "spring",
           stiffness: 500,
-          damping: 30
+          damping: 30,
         }}
       />
     </motion.button>
   );
-
 
   const SettingRow = ({ label, value, icon, children }) => (
     <div className="flex items-center justify-between py-3 border-b border-gray-700/30 last:border-b-0">
@@ -50,77 +83,81 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
         )}
       </div>
       <div className="flex items-center gap-2">
-        {children || (
-          <span className="text-white font-medium">{value}</span>
-        )}
+        {children || <span className="text-white font-medium">{value}</span>}
       </div>
     </div>
   );
 
   const sidebarItems = [
-    { id: 'general', label: 'General' },
-    { id: 'myplan', label: 'My Plan' },
+    { id: "general", label: "General" },
+    { id: "myplan", label: "My Plan" },
   ];
 
   const renderContent = () => {
     switch (activeSection) {
-      case 'general':
+      case "general":
         return (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-4">General Settings</h2>
+              <h2 className="text-xl font-semibold text-white mb-4">
+                General Settings
+              </h2>
               <div className="space-y-4">
                 <SettingRow
                   label="Username"
-                  value={user?.username || user?.name || '—'}
+                  value={user?.username || user?.name || "—"}
                   icon={<Check className="w-4 h-4 text-green-500" />}
                 />
                 <SettingRow
                   label="Language"
-                  value={user?.language || 'English'}
+                  value={user?.language || "English"}
                 />
                 <SettingRow
                   label="Timezone"
-                  value={user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  value={
+                    user?.timezone ||
+                    Intl.DateTimeFormat().resolvedOptions().timeZone
+                  }
                 />
               </div>
             </div>
 
             {/* Email Section */}
-            <div 
+            <div
               className="p-4 rounded-xl"
               style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)'
+                background: "rgba(255, 255, 255, 0.03)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
               <h3 className="text-lg font-semibold text-white mb-4">Email</h3>
               <div className="space-y-4">
-                <SettingRow
-                  label="Email address"
-                  value={user?.email || '—'}
-                />
+                <SettingRow label="Email address" value={user?.email || "—"} />
                 <SettingRow
                   label="Email verified"
-                  value={user?.emailVerified ? 'Yes' : 'No'}
-                  icon={user?.emailVerified ? <Check className="w-4 h-4 text-green-500" /> : null}
+                  value={user?.emailVerified ? "Yes" : "No"}
+                  icon={
+                    user?.emailVerified ? (
+                      <Check className="w-4 h-4 text-green-500" />
+                    ) : null
+                  }
                 />
                 <div className="pt-2">
-                  <button 
+                  <button
                     className="px-4 py-2 text-white text-sm font-medium rounded-lg transition-all duration-200"
                     style={{
-                      background: 'rgba(107, 114, 128, 0.3)',
-                      backdropFilter: 'blur(8px)',
-                      WebkitBackdropFilter: 'blur(8px)',
-                      border: '1px solid rgba(107, 114, 128, 0.3)'
+                      background: "rgba(107, 114, 128, 0.3)",
+                      backdropFilter: "blur(8px)",
+                      WebkitBackdropFilter: "blur(8px)",
+                      border: "1px solid rgba(107, 114, 128, 0.3)",
                     }}
                     onMouseEnter={(e) => {
-                      e.target.style.background = 'rgba(107, 114, 128, 0.4)';
+                      e.target.style.background = "rgba(107, 114, 128, 0.4)";
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.background = 'rgba(107, 114, 128, 0.3)';
+                      e.target.style.background = "rgba(107, 114, 128, 0.3)";
                     }}
                   >
                     Change Email
@@ -130,13 +167,13 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             </div>
 
             {/* Theme Section */}
-            <div 
+            <div
               className="p-4 rounded-xl"
               style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)'
+                background: "rgba(255, 255, 255, 0.03)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
               <h3 className="text-lg font-semibold text-white mb-4">Theme</h3>
@@ -146,38 +183,42 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                   value={isDark ? "Dark" : "Red"}
                   icon={<Check className="w-4 h-4 text-green-500" />}
                 />
-                <div 
+                <div
                   className="p-4 rounded-lg"
                   style={{
-                    background: 'rgba(107, 114, 128, 0.2)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
-                    border: '1px solid rgba(107, 114, 128, 0.2)'
+                    background: "rgba(107, 114, 128, 0.2)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    border: "1px solid rgba(107, 114, 128, 0.2)",
                   }}
                 >
                   <h4 className="text-white font-medium mb-2">Theme Options</h4>
                   <div className="space-y-2">
                     <label className="flex items-center gap-3 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="theme" 
-                        value="dark" 
+                      <input
+                        type="radio"
+                        name="theme"
+                        value="dark"
                         checked={isDark}
-                        onChange={() => changeTheme('dark')}
-                        className="text-red-600" 
+                        onChange={() => changeTheme("dark")}
+                        className="text-red-600"
                       />
-                      <span className="text-gray-300">Dark {isDark && '(Current)'}</span>
+                      <span className="text-gray-300">
+                        Dark {isDark && "(Current)"}
+                      </span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="theme" 
-                        value="red" 
+                      <input
+                        type="radio"
+                        name="theme"
+                        value="red"
                         checked={isRed}
-                        onChange={() => changeTheme('red')}
-                        className="text-red-600" 
+                        onChange={() => changeTheme("red")}
+                        className="text-red-600"
                       />
-                      <span className="text-gray-300">Red {isRed && '(Current)'}</span>
+                      <span className="text-gray-300">
+                        Red {isRed && "(Current)"}
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -185,56 +226,66 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             </div>
 
             {/* Privacy Section */}
-            <div 
+            <div
               className="p-4 rounded-xl"
               style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)'
+                background: "rgba(255, 255, 255, 0.03)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
               <h3 className="text-lg font-semibold text-white mb-4">Privacy</h3>
               <div className="space-y-6">
-                <div 
+                <div
                   className="p-4 rounded-lg"
                   style={{
-                    background: 'rgba(107, 114, 128, 0.1)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
-                    border: '1px solid rgba(107, 114, 128, 0.1)'
+                    background: "rgba(107, 114, 128, 0.1)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    border: "1px solid rgba(107, 114, 128, 0.1)",
                   }}
                 >
-                  <h4 className="text-lg font-medium text-white mb-3">Publish to explore</h4>
+                  <h4 className="text-lg font-medium text-white mb-3">
+                    Publish to explore
+                  </h4>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <h5 className="text-white font-medium mb-1">Enable public sharing</h5>
+                      <h5 className="text-white font-medium mb-1">
+                        Enable public sharing
+                      </h5>
                       <p className="text-sm text-gray-400 leading-relaxed">
-                        Allow your generated content to be featured in the public explore gallery.
+                        Allow your generated content to be featured in the
+                        public explore gallery.
                       </p>
                     </div>
                     <ToggleSwitch
                       isOn={publishToExplore}
-                      onToggle={() => setPublishToExplore(!publishToExplore)}
+                      onToggle={handleSharePubliclyToggle}
                     />
                   </div>
                 </div>
-                
-                <div 
+
+                <div
                   className="p-4 rounded-lg"
                   style={{
-                    background: 'rgba(107, 114, 128, 0.1)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
-                    border: '1px solid rgba(107, 114, 128, 0.1)'
+                    background: "rgba(107, 114, 128, 0.1)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    border: "1px solid rgba(107, 114, 128, 0.1)",
                   }}
                 >
-                  <h4 className="text-lg font-medium text-white mb-3">Improve the model for everyone</h4>
+                  <h4 className="text-lg font-medium text-white mb-3">
+                    Improve the model for everyone
+                  </h4>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <h5 className="text-white font-medium mb-1">Contribute to model improvement</h5>
+                      <h5 className="text-white font-medium mb-1">
+                        Contribute to model improvement
+                      </h5>
                       <p className="text-sm text-gray-400 leading-relaxed mb-2">
-                        Help improve our AI models by allowing your usage data to be used for training.
+                        Help improve our AI models by allowing your usage data
+                        to be used for training.
                       </p>
                       <motion.a
                         href="#"
@@ -256,12 +307,13 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             </div>
           </div>
         );
-      
-      case 'myplan':
-        const isSubscribed = user?.subscriptionStatus === 'active';
-        const isOnTrial = user?.subscriptionStatus === 'trial';
-        const isFree = user?.subscriptionStatus === 'free' || !user?.subscriptionStatus;
-        let currentPlan = isSubscribed ? 'pro' : isOnTrial ? 'plus' : 'free';
+
+      case "myplan":
+        const isSubscribed = user?.subscriptionStatus === "active";
+        const isOnTrial = user?.subscriptionStatus === "trial";
+        const isFree =
+          user?.subscriptionStatus === "free" || !user?.subscriptionStatus;
+        let currentPlan = isSubscribed ? "pro" : isOnTrial ? "plus" : "free";
         return (
           <div className="space-y-6">
             <div>
@@ -271,19 +323,23 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                   <div>
                     <h3 className="text-white font-medium">Current Plan</h3>
                     <p className="text-sm text-gray-400">
-                      {isSubscribed ? 'Pro plan with full access to all features' :
-                       isOnTrial ? 'Trial plan with premium features' :
-                       'Free tier with basic features'}
+                      {isSubscribed
+                        ? "Pro plan with full access to all features"
+                        : isOnTrial
+                          ? "Trial plan with premium features"
+                          : "Free tier with basic features"}
                     </p>
                   </div>
-                  <span className={`px-3 py-1 text-sm font-medium rounded-full border ${
-                    isSubscribed 
-                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                      : isOnTrial
-                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                      : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-                  }`}>
-                    {isSubscribed ? 'Pro' : isOnTrial ? 'Trial' : 'Free'}
+                  <span
+                    className={`px-3 py-1 text-sm font-medium rounded-full border ${
+                      isSubscribed
+                        ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                        : isOnTrial
+                          ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                          : "bg-gray-500/20 text-gray-400 border-gray-500/30"
+                    }`}
+                  >
+                    {isSubscribed ? "Pro" : isOnTrial ? "Trial" : "Free"}
                   </span>
                 </div>
                 <button
@@ -292,28 +348,32 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                 >
                   Manage Plan
                 </button>
-                
+
                 {!isSubscribed && (
                   <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
                     <h4 className="text-red-400 font-medium mb-2">
-                      {isOnTrial ? 'Upgrade to Pro' : 'Upgrade to Premium'}
+                      {isOnTrial ? "Upgrade to Pro" : "Upgrade to Premium"}
                     </h4>
                     <p className="text-sm text-gray-300 mb-3">
-                      {isOnTrial 
-                        ? 'Your trial will end soon. Upgrade to continue enjoying premium features.'
-                        : 'Get access to advanced features and higher limits'
-                      }
+                      {isOnTrial
+                        ? "Your trial will end soon. Upgrade to continue enjoying premium features."
+                        : "Get access to advanced features and higher limits"}
                     </p>
                     <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
-                      {isOnTrial ? 'Upgrade Now' : 'Upgrade Now'}
+                      {isOnTrial ? "Upgrade Now" : "Upgrade Now"}
                     </button>
                   </div>
                 )}
-                
+
                 {isSubscribed && (
                   <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <h4 className="text-blue-400 font-medium mb-2">Pro Plan Active</h4>
-                    <p className="text-sm text-gray-300 mb-3">You have full access to all premium features and higher usage limits.</p>
+                    <h4 className="text-blue-400 font-medium mb-2">
+                      Pro Plan Active
+                    </h4>
+                    <p className="text-sm text-gray-300 mb-3">
+                      You have full access to all premium features and higher
+                      usage limits.
+                    </p>
                     <div className="text-xs text-gray-400">
                       <p>• Unlimited API calls</p>
                       <p>• Advanced analytics</p>
@@ -322,11 +382,16 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                     </div>
                   </div>
                 )}
-                
+
                 {isOnTrial && (
                   <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <h4 className="text-blue-400 font-medium mb-2">Trial Active</h4>
-                    <p className="text-sm text-gray-300 mb-3">You're currently enjoying premium features during your trial period.</p>
+                    <h4 className="text-blue-400 font-medium mb-2">
+                      Trial Active
+                    </h4>
+                    <p className="text-sm text-gray-300 mb-3">
+                      You're currently enjoying premium features during your
+                      trial period.
+                    </p>
                     <div className="text-xs text-gray-400">
                       <p>• Full access to premium features</p>
                       <p>• Higher usage limits</p>
@@ -338,8 +403,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             </div>
           </div>
         );
-      
-      
+
       default:
         return null;
     }
@@ -372,10 +436,10 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             transition={{ duration: 0.3, ease: "easeOut" }}
             className="relative w-full max-w-[900px] h-[600px] bg-white/5 backdrop-blur-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+              background: "rgba(255, 255, 255, 0.05)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -383,7 +447,9 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             <div className="flex items-center justify-between p-6 border-b border-white/20 bg-white/5 backdrop-blur-sm">
               <div>
                 <h1 className="text-2xl font-bold text-white">Settings</h1>
-                <p className="text-sm text-gray-400 mt-1">Manage your preferences</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Manage your preferences
+                </p>
               </div>
               <motion.button
                 onClick={onClose}
@@ -398,12 +464,12 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             {/* Two-column layout */}
             <div className="flex flex-1 overflow-hidden">
               {/* Left Sidebar */}
-              <div 
+              <div
                 className="w-[30%] border-r border-white/20"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  backdropFilter: 'blur(15px)',
-                  WebkitBackdropFilter: 'blur(15px)'
+                  background: "rgba(255, 255, 255, 0.03)",
+                  backdropFilter: "blur(15px)",
+                  WebkitBackdropFilter: "blur(15px)",
                 }}
               >
                 <nav className="p-4">
@@ -414,29 +480,36 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                         onClick={() => setActiveSection(item.id)}
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                           activeSection === item.id
-                            ? 'text-white'
-                            : 'text-gray-300 hover:text-white'
+                            ? "text-white"
+                            : "text-gray-300 hover:text-white"
                         }`}
                         style={{
-                          background: activeSection === item.id 
-                            ? 'rgba(239, 68, 68, 0.3)' 
-                            : 'transparent',
-                          backdropFilter: activeSection === item.id ? 'blur(10px)' : 'none',
-                          WebkitBackdropFilter: activeSection === item.id ? 'blur(10px)' : 'none',
-                          border: activeSection === item.id ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid transparent'
+                          background:
+                            activeSection === item.id
+                              ? "rgba(239, 68, 68, 0.3)"
+                              : "transparent",
+                          backdropFilter:
+                            activeSection === item.id ? "blur(10px)" : "none",
+                          WebkitBackdropFilter:
+                            activeSection === item.id ? "blur(10px)" : "none",
+                          border:
+                            activeSection === item.id
+                              ? "1px solid rgba(239, 68, 68, 0.3)"
+                              : "1px solid transparent",
                         }}
                         onMouseEnter={(e) => {
                           if (activeSection !== item.id) {
-                            e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-                            e.target.style.backdropFilter = 'blur(10px)';
-                            e.target.style.WebkitBackdropFilter = 'blur(10px)';
+                            e.target.style.background =
+                              "rgba(255, 255, 255, 0.1)";
+                            e.target.style.backdropFilter = "blur(10px)";
+                            e.target.style.WebkitBackdropFilter = "blur(10px)";
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (activeSection !== item.id) {
-                            e.target.style.background = 'transparent';
-                            e.target.style.backdropFilter = 'none';
-                            e.target.style.WebkitBackdropFilter = 'none';
+                            e.target.style.background = "transparent";
+                            e.target.style.backdropFilter = "none";
+                            e.target.style.WebkitBackdropFilter = "none";
                           }
                         }}
                         whileHover={{ scale: 1.02 }}
@@ -450,41 +523,39 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
               </div>
 
               {/* Right Content Area */}
-              <div 
+              <div
                 className="flex-1 overflow-y-auto"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)'
+                  background: "rgba(255, 255, 255, 0.02)",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
                 }}
               >
-                <div className="p-6">
-                  {renderContent()}
-                </div>
+                <div className="p-6">{renderContent()}</div>
               </div>
             </div>
 
             {/* Footer */}
-            <div 
+            <div
               className="flex items-center justify-end p-6 border-t border-white/20"
               style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                backdropFilter: 'blur(15px)',
-                WebkitBackdropFilter: 'blur(15px)'
+                background: "rgba(255, 255, 255, 0.03)",
+                backdropFilter: "blur(15px)",
+                WebkitBackdropFilter: "blur(15px)",
               }}
             >
               <motion.button
                 onClick={onClose}
                 className="px-6 py-2 text-white font-medium rounded-lg transition-all duration-200"
                 style={{
-                  background: 'rgba(239, 68, 68, 0.3)',
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(239, 68, 68, 0.4)'
+                  background: "rgba(239, 68, 68, 0.3)",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
                 }}
-                whileHover={{ 
+                whileHover={{
                   scale: 1.02,
-                  background: 'rgba(239, 68, 68, 0.4)'
+                  background: "rgba(239, 68, 68, 0.4)",
                 }}
                 whileTap={{ scale: 0.98 }}
               >

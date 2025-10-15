@@ -1,11 +1,11 @@
-const User = require('../models/User');
-const jwt = require('jsonwebtoken');
-const SubscriptionPlan = require('../models/SubscriptionPlan'); // Add this at the top
+const User = require("../models/User");
+const jwt = require("jsonwebtoken");
+const SubscriptionPlan = require("../models/SubscriptionPlan"); // Add this at the top
 
 // Generate JWT token
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET || 'your-secret-key', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+  return jwt.sign({ userId }, process.env.JWT_SECRET || "your-secret-key", {
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 };
 
@@ -21,12 +21,15 @@ const registerUser = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: 'User with this email or username already exists'
+        message: "User with this email or username already exists",
       });
     }
 
     // Find the free plan
-    const freePlan = await SubscriptionPlan.findOne({ name: 'free', isActive: true });
+    const freePlan = await SubscriptionPlan.findOne({
+      name: "free",
+      isActive: true,
+    });
 
     // Create user with free plan as default
     const user = await User.create({
@@ -35,7 +38,7 @@ const registerUser = async (req, res) => {
       password,
       firstName,
       lastName,
-      subscriptionPlan: freePlan ? freePlan._id : null // assign free plan if found
+      subscriptionPlan: freePlan ? freePlan._id : null, // assign free plan if found
     });
 
     // Generate token
@@ -43,18 +46,18 @@ const registerUser = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: "User registered successfully",
       data: {
         user,
-        token
-      }
+        token,
+      },
     });
   } catch (error) {
-    console.error('Register user error:', error);
+    console.error("Register user error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to register user',
-      error: error.message
+      message: "Failed to register user",
+      error: error.message,
     });
   }
 };
@@ -67,11 +70,12 @@ const loginUser = async (req, res) => {
     const { identifier, password } = req.body; // identifier can be email or username
 
     // Find user by email or username
-    const user = await User.findByEmailOrUsername(identifier).select('+password');
+    const user =
+      await User.findByEmailOrUsername(identifier).select("+password");
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: "Invalid credentials",
       });
     }
 
@@ -80,7 +84,7 @@ const loginUser = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: "Invalid credentials",
       });
     }
 
@@ -92,18 +96,18 @@ const loginUser = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Login successful',
+      message: "Login successful",
       data: {
         user,
-        token
-      }
+        token,
+      },
     });
   } catch (error) {
-    console.error('Login user error:', error);
+    console.error("Login user error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to login',
-      error: error.message
+      message: "Failed to login",
+      error: error.message,
     });
   }
 };
@@ -117,20 +121,20 @@ const getUserProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: user
+      data: user,
     });
   } catch (error) {
-    console.error('Get user profile error:', error);
+    console.error("Get user profile error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get user profile',
-      error: error.message
+      message: "Failed to get user profile",
+      error: error.message,
     });
   }
 };
@@ -147,36 +151,74 @@ const updateUserProfile = async (req, res) => {
     if (lastName) updateData.lastName = lastName;
     if (username) updateData.username = username;
 
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    const user = await User.findByIdAndUpdate(req.user._id, updateData, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
-      data: user
+      message: "Profile updated successfully",
+      data: user,
     });
   } catch (error) {
-    console.error('Update user profile error:', error);
+    console.error("Update user profile error:", error);
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'Username already taken'
+        message: "Username already taken",
       });
     }
     res.status(500).json({
       success: false,
-      message: 'Failed to update profile',
-      error: error.message
+      message: "Failed to update profile",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Update user settings
+// @route   PUT /api/users/settings
+// @access  Private
+const updateUserSettings = async (req, res) => {
+  try {
+    const { shareImagesPublicly } = req.body;
+
+    const updateData = {};
+    if (shareImagesPublicly !== undefined) {
+      updateData.shareImagesPublicly = shareImagesPublicly;
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Settings updated successfully",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Update user settings error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update settings",
+      error: error.message,
     });
   }
 };
@@ -191,7 +233,7 @@ const getAllUsers = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const users = await User.find({})
-      .select('-password')
+      .select("-password")
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 });
@@ -206,15 +248,15 @@ const getAllUsers = async (req, res) => {
         totalPages: Math.ceil(total / limit),
         totalUsers: total,
         hasNext: page * limit < total,
-        hasPrev: page > 1
-      }
+        hasPrev: page > 1,
+      },
     });
   } catch (error) {
-    console.error('Get all users error:', error);
+    console.error("Get all users error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get users',
-      error: error.message
+      message: "Failed to get users",
+      error: error.message,
     });
   }
 };
@@ -228,20 +270,20 @@ const getUserById = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: user
+      data: user,
     });
   } catch (error) {
-    console.error('Get user by ID error:', error);
+    console.error("Get user by ID error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get user',
-      error: error.message
+      message: "Failed to get user",
+      error: error.message,
     });
   }
 };
@@ -261,36 +303,35 @@ const updateUser = async (req, res) => {
     if (role !== undefined) updateData.role = role;
     if (isActive !== undefined) updateData.isActive = isActive;
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    const user = await User.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'User updated successfully',
-      data: user
+      message: "User updated successfully",
+      data: user,
     });
   } catch (error) {
-    console.error('Update user error:', error);
+    console.error("Update user error:", error);
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'Email or username already taken'
+        message: "Email or username already taken",
       });
     }
     res.status(500).json({
       success: false,
-      message: 'Failed to update user',
-      error: error.message
+      message: "Failed to update user",
+      error: error.message,
     });
   }
 };
@@ -304,7 +345,7 @@ const deleteUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
@@ -312,14 +353,14 @@ const deleteUser = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'User deleted successfully'
+      message: "User deleted successfully",
     });
   } catch (error) {
-    console.error('Delete user error:', error);
+    console.error("Delete user error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete user',
-      error: error.message
+      message: "Failed to delete user",
+      error: error.message,
     });
   }
 };
@@ -329,8 +370,9 @@ module.exports = {
   loginUser,
   getUserProfile,
   updateUserProfile,
+  updateUserSettings,
   getAllUsers,
   getUserById,
   updateUser,
-  deleteUser
+  deleteUser,
 };

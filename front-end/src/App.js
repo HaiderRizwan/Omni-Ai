@@ -12,6 +12,7 @@ import Footer from './components/Footer';
 import Dashboard from './components/Dashboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import safeLocalStorage from './utils/localStorage';
+import OAuthSuccess from './components/OAuthSuccess';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -35,6 +36,11 @@ function App() {
     }
     setIsLoading(false);
   }, []);
+
+  // Handle OAuth redirect path without a router (after hooks to avoid conditional hooks)
+  if (typeof window !== 'undefined' && window.location && window.location.pathname.startsWith('/oauth')) {
+    return <OAuthSuccess />;
+  }
 
   const handleLogout = () => {
     safeLocalStorage.removeItem('user');

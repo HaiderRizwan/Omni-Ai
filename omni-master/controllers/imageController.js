@@ -1,68 +1,71 @@
-const GenerationJob = require('../models/GenerationJob');
-const Character = require('../models/Character');
-const Image = require('../models/Image');
-const axios = require('axios');
-const { saveBufferToUploads } = require('../utils/localUploader');
-const { HfInference } = require('@huggingface/inference');
+const GenerationJob = require("../models/GenerationJob");
+const Character = require("../models/Character");
+const Image = require("../models/Image");
+const User = require("../models/User");
+const axios = require("axios");
+const { saveBufferToUploads } = require("../utils/localUploader");
+const { HfInference } = require("@huggingface/inference");
 
 // Image generation API configurations
 const IMAGE_APIS = {
   a2eTextToImage: {
-    baseUrl: 'https://video.a2e.ai/api/v1',
-    apiKey: process.env.A2E_API_KEY
+    baseUrl: "https://video.a2e.ai/api/v1",
+    apiKey: process.env.A2E_API_KEY,
   },
   a2eImageToVideo: {
-    baseUrl: 'https://api.a2e.ai/api/v1',
-    apiKey: process.env.A2E_API_KEY
-  }
+    baseUrl: "https://api.a2e.ai/api/v1",
+    apiKey: process.env.A2E_API_KEY,
+  },
 };
 
-const DEFAULT_PROVIDER = 'a2e';
+const DEFAULT_PROVIDER = "a2e";
 
 // @desc    Generate image
 // @route   POST /api/images/generate
 // @access  Private (Premium)
 const generateImage = async (req, res) => {
   try {
-    console.log('=== IMAGE CONTROLLER DEBUG BOX ===');
-    console.log('Function: generateImage');
-    console.log('Request body:', req.body);
-    console.log('User ID:', req.user?._id);
-    console.log('==================================');
-    
+    console.log("=== IMAGE CONTROLLER DEBUG BOX ===");
+    console.log("Function: generateImage");
+    console.log("Request body:", req.body);
+    console.log("User ID:", req.user?._id);
+    console.log("==================================");
+
     const {
       prompt,
       negativePrompt,
       style,
-      aspectRatio = '1:1',
-      characterId
+      aspectRatio = "1:1",
+      characterId,
     } = req.body;
 
     // Validate required fields
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+    if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Prompt is required'
+        message: "Prompt is required",
       });
     }
 
     // Check available API keys
-    console.log('=== API KEY CHECK ===');
-    console.log('A2E_API_KEY exists:', !!process.env.A2E_API_KEY);
-    console.log('OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY);
-    console.log('HF_TOKEN exists:', !!process.env.HF_TOKEN);
-    console.log('OPENROUTER_API_KEY exists:', !!process.env.OPENROUTER_API_KEY);
-    console.log('STABILITY_API_KEY exists:', !!process.env.STABILITY_API_KEY);
-    console.log('REPLICATE_API_KEY exists:', !!process.env.REPLICATE_API_KEY);
-    console.log('========================');
+    console.log("=== API KEY CHECK ===");
+    console.log("A2E_API_KEY exists:", !!process.env.A2E_API_KEY);
+    console.log("OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
+    console.log("HF_TOKEN exists:", !!process.env.HF_TOKEN);
+    console.log("OPENROUTER_API_KEY exists:", !!process.env.OPENROUTER_API_KEY);
+    console.log("STABILITY_API_KEY exists:", !!process.env.STABILITY_API_KEY);
+    console.log("REPLICATE_API_KEY exists:", !!process.env.REPLICATE_API_KEY);
+    console.log("========================");
 
     // Only a2e provider
     if (!process.env.A2E_API_KEY) {
-      return res.status(400).json({ success: false, message: 'A2E_API_KEY is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "A2E_API_KEY is required" });
     }
-    const provider = 'a2e';
+    const provider = "a2e";
 
-    console.log('Selected provider:', provider);
+    console.log("Selected provider:", provider);
 
     let enhancedPrompt = prompt;
 
@@ -70,13 +73,13 @@ const generateImage = async (req, res) => {
     if (characterId) {
       const character = await Character.findOne({
         _id: characterId,
-        user: req.user._id
+        user: req.user._id,
       });
 
       if (!character) {
         return res.status(404).json({
           success: false,
-          message: 'Character not found'
+          message: "Character not found",
         });
       }
 
@@ -90,15 +93,15 @@ const generateImage = async (req, res) => {
     // Create generation job
     const job = await GenerationJob.create({
       user: req.user._id,
-      type: 'image',
-      status: 'pending',
+      type: "image",
+      status: "pending",
       parameters: {
         prompt: enhancedPrompt,
         aspectRatio,
         style,
-        negativePrompt
+        negativePrompt,
       },
-      provider: provider
+      provider: provider,
     });
 
     // Start image generation process asynchronously
@@ -107,7 +110,7 @@ const generateImage = async (req, res) => {
       aspectRatio,
       style,
       negativePrompt,
-      provider
+      provider,
     });
 
     res.status(202).json({
@@ -115,20 +118,19 @@ const generateImage = async (req, res) => {
       data: {
         jobId: job._id,
         status: job.status,
-        message: 'Image generation started',
-        estimatedTime: '30-60 seconds',
+        message: "Image generation started",
+        estimatedTime: "30-60 seconds",
         prompt: enhancedPrompt,
         aspectRatio,
-        style
-      }
+        style,
+      },
     });
-
   } catch (error) {
-    console.error('Generate image error:', error);
+    console.error("Generate image error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to generate image',
-      error: error.message
+      message: "Failed to generate image",
+      error: error.message,
     });
   }
 };
@@ -141,26 +143,26 @@ const getImageJob = async (req, res) => {
     const job = await GenerationJob.findOne({
       _id: req.params.id,
       user: req.user._id,
-      type: 'image'
-    }).populate('characters.characterId', 'name imageUrl');
+      type: "image",
+    }).populate("characters.characterId", "name imageUrl");
 
     if (!job) {
       return res.status(404).json({
         success: false,
-        message: 'Image generation job not found'
+        message: "Image generation job not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: job
+      data: job,
     });
   } catch (error) {
-    console.error('Get image job error:', error);
+    console.error("Get image job error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get image job',
-      error: error.message
+      message: "Failed to get image job",
+      error: error.message,
     });
   }
 };
@@ -174,7 +176,7 @@ const getImageHistory = async (req, res) => {
 
     const query = {
       user: req.user._id,
-      type: 'image'
+      type: "image",
     };
 
     if (status) {
@@ -184,19 +186,19 @@ const getImageHistory = async (req, res) => {
     const jobs = await GenerationJob.find(query)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate('characters.characterId', 'name imageUrl');
+      .populate("characters.characterId", "name imageUrl");
 
     res.status(200).json({
       success: true,
       data: jobs,
-      count: jobs.length
+      count: jobs.length,
     });
   } catch (error) {
-    console.error('Get image history error:', error);
+    console.error("Get image history error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get image history',
-      error: error.message
+      message: "Failed to get image history",
+      error: error.message,
     });
   }
 };
@@ -209,20 +211,20 @@ const cancelImageJob = async (req, res) => {
     const job = await GenerationJob.findOne({
       _id: req.params.id,
       user: req.user._id,
-      type: 'image'
+      type: "image",
     });
 
     if (!job) {
       return res.status(404).json({
         success: false,
-        message: 'Image generation job not found'
+        message: "Image generation job not found",
       });
     }
 
-    if (job.status === 'completed' || job.status === 'failed') {
+    if (job.status === "completed" || job.status === "failed") {
       return res.status(400).json({
         success: false,
-        message: 'Job is already completed or failed'
+        message: "Job is already completed or failed",
       });
     }
 
@@ -230,15 +232,15 @@ const cancelImageJob = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Image generation job cancelled',
-      data: job
+      message: "Image generation job cancelled",
+      data: job,
     });
   } catch (error) {
-    console.error('Cancel image job error:', error);
+    console.error("Cancel image job error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to cancel image job',
-      error: error.message
+      message: "Failed to cancel image job",
+      error: error.message,
     });
   }
 };
@@ -246,85 +248,104 @@ const cancelImageJob = async (req, res) => {
 // Helper function to process image generation
 const processImageGeneration = async (jobId, params) => {
   try {
-    console.log('=== PROCESSING IMAGE GENERATION ===');
-    console.log('Job ID:', jobId);
-    console.log('Params:', params);
-    console.log('Provider:', params.provider || DEFAULT_PROVIDER);
-    console.log('==================================');
+    console.log("=== PROCESSING IMAGE GENERATION ===");
+    console.log("Job ID:", jobId);
+    console.log("Params:", params);
+    console.log("Provider:", params.provider || DEFAULT_PROVIDER);
+    console.log("==================================");
 
     const job = await GenerationJob.findById(jobId);
     if (!job) {
-      console.error('Job not found:', jobId);
+      console.error("Job not found:", jobId);
       return;
     }
 
     await job.start();
-    console.log('Job started successfully');
+    console.log("Job started successfully");
 
-    let imageUrl = '';
+    let imageUrl = "";
     const provider = params.provider || DEFAULT_PROVIDER;
 
-    console.log('Generating image with provider:', provider);
+    console.log("Generating image with provider:", provider);
 
     // Generate image based on provider
     switch (provider) {
-      case 'a2e':
-        console.log('Using A2E Text-to-Image');
+      case "a2e":
+        console.log("Using A2E Text-to-Image");
         imageUrl = await generateWithA2ETextToImage(params);
         break;
       default:
         throw new Error(`Unsupported provider: ${provider}`);
     }
 
-    console.log('Image generated successfully, URL length:', imageUrl?.length);
+    console.log("Image generated successfully, URL length:", imageUrl?.length);
 
     // Save image to database
     let savedImage = null;
-    if (imageUrl && imageUrl.startsWith('data:image/')) {
+    if (imageUrl && imageUrl.startsWith("data:image/")) {
       try {
         // Extract base64 data from data URL
-        const base64Data = imageUrl.split(',')[1];
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        
-        console.log('Saving image to database:', {
+        const base64Data = imageUrl.split(",")[1];
+        const imageBuffer = Buffer.from(base64Data, "base64");
+
+        console.log("Saving image to database:", {
           originalUrlLength: imageUrl.length,
           base64DataLength: base64Data.length,
           bufferLength: imageBuffer.length,
-          bufferStart: imageBuffer.slice(0, 10).toString('hex')
+          bufferStart: imageBuffer.slice(0, 10).toString("hex"),
         });
-        
+
         // Determine image format and dimensions
         const getImageFormat = (buffer) => {
-          if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
-            return { format: 'png', extension: 'png', mimeType: 'image/png' };
-          } else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
-            return { format: 'jpeg', extension: 'jpg', mimeType: 'image/jpeg' };
-          } else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
-            return { format: 'gif', extension: 'gif', mimeType: 'image/gif' };
+          if (
+            buffer[0] === 0x89 &&
+            buffer[1] === 0x50 &&
+            buffer[2] === 0x4e &&
+            buffer[3] === 0x47
+          ) {
+            return { format: "png", extension: "png", mimeType: "image/png" };
+          } else if (
+            buffer[0] === 0xff &&
+            buffer[1] === 0xd8 &&
+            buffer[2] === 0xff
+          ) {
+            return { format: "jpeg", extension: "jpg", mimeType: "image/jpeg" };
+          } else if (
+            buffer[0] === 0x47 &&
+            buffer[1] === 0x49 &&
+            buffer[2] === 0x46
+          ) {
+            return { format: "gif", extension: "gif", mimeType: "image/gif" };
           } else {
-            return { format: 'png', extension: 'png', mimeType: 'image/png' }; // Default fallback
+            return { format: "png", extension: "png", mimeType: "image/png" }; // Default fallback
           }
         };
-        
+
         const getDimensions = (aspectRatio) => {
           switch (aspectRatio) {
-            case '1:1': return { width: 1024, height: 1024 };
-            case '4:3': return { width: 1024, height: 768 };
-            case '3:4': return { width: 768, height: 1024 };
-            case '16:9': return { width: 1024, height: 576 };
-            case '9:16': return { width: 576, height: 1024 };
-            default: return { width: 1024, height: 1024 };
+            case "1:1":
+              return { width: 1024, height: 1024 };
+            case "4:3":
+              return { width: 1024, height: 768 };
+            case "3:4":
+              return { width: 768, height: 1024 };
+            case "16:9":
+              return { width: 1024, height: 576 };
+            case "9:16":
+              return { width: 576, height: 1024 };
+            default:
+              return { width: 1024, height: 1024 };
           }
         };
-        
+
         const { width, height } = getDimensions(params.aspectRatio);
         const imageFormat = getImageFormat(imageBuffer);
-        
+
         // Create image record in database
         savedImage = await Image.create({
           user: job.user,
           prompt: params.prompt,
-          negativePrompt: params.negativePrompt || '',
+          negativePrompt: params.negativePrompt || "",
           imageData: imageBuffer,
           contentType: imageFormat.mimeType,
           filename: `generated-image-${Date.now()}.${imageFormat.extension}`,
@@ -332,58 +353,58 @@ const processImageGeneration = async (jobId, params) => {
           width,
           height,
           settings: {
-            style: params.style || 'realistic',
-            quality: 'high',
+            style: params.style || "realistic",
+            quality: "high",
             aspectRatio: params.aspectRatio,
             seed: params.seed,
-            model: 'stable-diffusion-xl',
+            model: "stable-diffusion-xl",
             steps: 30,
-            guidance: 7.5
+            guidance: 7.5,
           },
           metadata: {
             provider,
             generationTime: Date.now() - job.timing.startedAt.getTime(),
-            originalPrompt: params.prompt
-          }
+            originalPrompt: params.prompt,
+          },
         });
-        
-        console.log('Image saved to database with ID:', savedImage._id);
-        
+
+        console.log("Image saved to database with ID:", savedImage._id);
+
         // Update imageUrl to use the database URL
         imageUrl = savedImage.getImageUrl();
-        
       } catch (error) {
-        console.error('Error saving image to database:', error);
+        console.error("Error saving image to database:", error);
         // Continue with base64 URL if database save fails
       }
     }
 
     // Complete job with result
-    await job.complete([{
-      url: imageUrl,
-      filename: `generated-image-${Date.now()}.png`,
-      format: 'png',
-      size: savedImage ? savedImage.size : 1024000,
-      metadata: {
-        prompt: params.prompt,
-        provider,
-        style: params.style,
-        aspectRatio: params.aspectRatio,
-        imageId: savedImage ? savedImage._id : null
-      }
-    }]);
+    await job.complete([
+      {
+        url: imageUrl,
+        filename: `generated-image-${Date.now()}.png`,
+        format: "png",
+        size: savedImage ? savedImage.size : 1024000,
+        metadata: {
+          prompt: params.prompt,
+          provider,
+          style: params.style,
+          aspectRatio: params.aspectRatio,
+          imageId: savedImage ? savedImage._id : null,
+        },
+      },
+    ]);
 
-    console.log('Job completed successfully');
-
+    console.log("Job completed successfully");
   } catch (error) {
-    console.error('Image generation process error:', error);
-    console.error('Error details:', {
+    console.error("Image generation process error:", error);
+    console.error("Error details:", {
       message: error.message,
       stack: error.stack,
       provider: params.provider || DEFAULT_PROVIDER,
-      a2e: error.response?.data || null
+      a2e: error.response?.data || null,
     });
-    
+
     const job = await GenerationJob.findById(jobId);
     if (job) {
       await job.fail(error.message);
@@ -396,35 +417,45 @@ const processImageGeneration = async (jobId, params) => {
 // Helper function to pick alternate base URL with multiple fallbacks
 const pickAltImageBase = (current) => {
   const fallbacks = [
-    'https://video.a2e.ai/api/v1',
-    'https://video.a2e.com.cn/api/v1',
-    'https://api.a2e.ai/api/v1',
-    'https://api.avatar2everyone.com/api/v1'
+    "https://video.a2e.ai/api/v1",
+    "https://video.a2e.com.cn/api/v1",
+    "https://api.a2e.ai/api/v1",
+    "https://api.avatar2everyone.com/api/v1",
   ];
-  
+
   // Find current URL and return next fallback
-  const currentIndex = fallbacks.findIndex(url => current.includes(url.replace('/api/v1', '').replace('https://', '')));
+  const currentIndex = fallbacks.findIndex((url) =>
+    current.includes(url.replace("/api/v1", "").replace("https://", "")),
+  );
   if (currentIndex >= 0 && currentIndex < fallbacks.length - 1) {
     return fallbacks[currentIndex + 1];
   }
-  
+
   // Default fallback
-  return current.includes('video.a2e.ai') ? 'https://video.a2e.com.cn/api/v1' : 'https://video.a2e.ai/api/v1';
+  return current.includes("video.a2e.ai")
+    ? "https://video.a2e.com.cn/api/v1"
+    : "https://video.a2e.ai/api/v1";
 };
 
 // Helper function with retry logic for DNS issues
 const withImageRetries = async (fn, { attempts = 3, delayMs = 1500 } = {}) => {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
-    try { 
-      return await fn(); 
+    try {
+      return await fn();
     } catch (err) {
       lastErr = err;
-      const msg = (err && err.message) || '';
+      const msg = (err && err.message) || "";
       // Retry DNS/network errors
-      if (/EAI_AGAIN|ENOTFOUND|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|getaddrinfo/i.test(msg)) {
-        console.log(`🔄 DNS/Network error, retrying ${i + 1}/${attempts}: ${msg}`);
-        await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+      if (
+        /EAI_AGAIN|ENOTFOUND|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|getaddrinfo/i.test(
+          msg,
+        )
+      ) {
+        console.log(
+          `🔄 DNS/Network error, retrying ${i + 1}/${attempts}: ${msg}`,
+        );
+        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
         continue;
       }
       break;
@@ -435,308 +466,360 @@ const withImageRetries = async (fn, { attempts = 3, delayMs = 1500 } = {}) => {
 
 // A2E Text-to-Image integration using the official userText2image endpoint
 const generateWithA2ETextToImage = async (params) => {
-  console.log('🎨 === A2E TEXT-TO-IMAGE START ===');
-  console.log('📝 Prompt:', params.prompt);
-  
+  console.log("🎨 === A2E TEXT-TO-IMAGE START ===");
+  console.log("📝 Prompt:", params.prompt);
+
   let config = IMAGE_APIS.a2eTextToImage;
-  console.log('🔗 Primary base URL:', config.baseUrl);
-  
+  console.log("🔗 Primary base URL:", config.baseUrl);
+
   // Use default dimensions if not provided
   const width = params.width || 1024;
   const height = params.height || 1024;
-  
+
   let response;
-  
+
   const fallbackUrls = [
     config.baseUrl,
-    'https://video.a2e.com.cn/api/v1',
-    'https://api.a2e.ai/api/v1',
-    'https://api.avatar2everyone.com/api/v1'
+    "https://video.a2e.com.cn/api/v1",
+    "https://api.a2e.ai/api/v1",
+    "https://api.avatar2everyone.com/api/v1",
   ];
-  
+
   let lastError = null;
   let success = false;
-  
+
   for (let i = 0; i < fallbackUrls.length && !success; i++) {
     const currentUrl = fallbackUrls[i];
-    console.log(`📡 Trying endpoint ${i + 1}/${fallbackUrls.length}: ${currentUrl}`);
-    
+    console.log(
+      `📡 Trying endpoint ${i + 1}/${fallbackUrls.length}: ${currentUrl}`,
+    );
+
     try {
-      response = await withImageRetries(() => axios.post(
-        `${currentUrl}/userText2image/start`,
-        {
-          name: "Omni-AI Generated Image",
-          prompt: params.prompt,
-          negative_prompt: params.negativePrompt || '',
-          req_key: "high_aes_general_v21_L", // General style
-          width: width,
-          height: height
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${config.apiKey}`,
-            'Content-Type': 'application/json'
+      response = await withImageRetries(() =>
+        axios.post(
+          `${currentUrl}/userText2image/start`,
+          {
+            name: "Omni-AI Generated Image",
+            prompt: params.prompt,
+            negative_prompt: params.negativePrompt || "",
+            req_key: "high_aes_general_v21_L", // General style
+            width: width,
+            height: height,
           },
-          timeout: 120000
-        }
-      ));
-      
+          {
+            headers: {
+              Authorization: `Bearer ${config.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 120000,
+          },
+        ),
+      );
+
       console.log(`✅ Endpoint ${i + 1} successful: ${currentUrl}`);
       config = { ...config, baseUrl: currentUrl };
       success = true;
-      
     } catch (error) {
       console.log(`⚠️ Endpoint ${i + 1} failed:`, error.message);
       lastError = error;
-      
+
       // Add delay between attempts
       if (i < fallbackUrls.length - 1) {
-        console.log('⏳ Waiting 2 seconds before trying next endpoint...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log("⏳ Waiting 2 seconds before trying next endpoint...");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
   }
-  
+
   if (!success) {
-    console.log('❌ All endpoints failed');
-    throw new Error(`A2E API completely unreachable. Last error: ${lastError?.message || 'Unknown error'}`);
+    console.log("❌ All endpoints failed");
+    throw new Error(
+      `A2E API completely unreachable. Last error: ${lastError?.message || "Unknown error"}`,
+    );
   }
 
-  console.log('📨 Response code:', response.data.code);
-  console.log('📨 Response data:', JSON.stringify(response.data, null, 2));
+  console.log("📨 Response code:", response.data.code);
+  console.log("📨 Response data:", JSON.stringify(response.data, null, 2));
 
   if (response.data.code !== 0) {
-    console.error('A2E Text-to-Image API Error:', response.data);
-    throw new Error(`A2E API Error: ${response.data.message || 'Unknown error'}`);
+    console.error("A2E Text-to-Image API Error:", response.data);
+    throw new Error(
+      `A2E API Error: ${response.data.message || "Unknown error"}`,
+    );
   }
 
   const responseData = response.data.data;
   const currentStatus = responseData.current_status;
-  console.log('📊 Current status:', currentStatus);
+  console.log("📊 Current status:", currentStatus);
 
   // Check if image is already completed (synchronous response)
-  if (currentStatus === 'completed' && responseData.image_urls && responseData.image_urls.length > 0) {
-    console.log('✅ Image generation completed immediately!');
+  if (
+    currentStatus === "completed" &&
+    responseData.image_urls &&
+    responseData.image_urls.length > 0
+  ) {
+    console.log("✅ Image generation completed immediately!");
     const imageUrl = responseData.image_urls[0];
-    console.log('🔗 Image URL:', imageUrl);
-    
+    console.log("🔗 Image URL:", imageUrl);
+
     // Fetch the image content from the URL provided by A2E
-    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-    const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
-    console.log('✅ Image downloaded and converted to base64');
+    const imageResponse = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+    });
+    const base64 = Buffer.from(imageResponse.data, "binary").toString("base64");
+    console.log("✅ Image downloaded and converted to base64");
     return `data:image/png;base64,${base64}`;
   }
 
   // If not completed immediately, poll for completion
   const taskId = responseData._id;
-  console.log('🆔 Task ID:', taskId);
-  console.log('⏳ Image not ready immediately, starting polling...');
-  
-  for (let i = 0; i < 60; i++) { // 5 minutes total
+  console.log("🆔 Task ID:", taskId);
+  console.log("⏳ Image not ready immediately, starting polling...");
+
+  for (let i = 0; i < 60; i++) {
+    // 5 minutes total
     console.log(`🔄 Polling attempt ${i + 1}/60...`);
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
     let statusData = null;
-    
+
     try {
       // Check the task status using the task ID
-      const statusResponse = await withImageRetries(() => axios.get(
-        `${config.baseUrl}/userText2image/${taskId}`,
-        { headers: { 'Authorization': `Bearer ${config.apiKey}` } }
-      ));
-      
-      console.log(`📊 Status response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
+      const statusResponse = await withImageRetries(() =>
+        axios.get(`${config.baseUrl}/userText2image/${taskId}`, {
+          headers: { Authorization: `Bearer ${config.apiKey}` },
+        }),
+      );
+
+      console.log(
+        `📊 Status response ${i + 1}:`,
+        JSON.stringify(statusResponse.data, null, 2),
+      );
       statusData = statusResponse.data.data || statusResponse.data;
-      
     } catch (statusError) {
       console.log(`⚠️ Status check ${i + 1} failed:`, statusError.message);
       continue;
     }
-    
+
     const currentStatus = statusData?.current_status;
     console.log(`📊 Current status: ${currentStatus}`);
-    
-    if (currentStatus === 'completed') {
+
+    if (currentStatus === "completed") {
       if (statusData.image_urls && statusData.image_urls.length > 0) {
         const imageUrl = statusData.image_urls[0];
-        console.log('✅ Image generation completed! URL:', imageUrl);
-        
+        console.log("✅ Image generation completed! URL:", imageUrl);
+
         // Fetch the image content from the URL provided by A2E
-        const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-        const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
-        console.log('✅ Image downloaded and converted to base64');
+        const imageResponse = await axios.get(imageUrl, {
+          responseType: "arraybuffer",
+        });
+        const base64 = Buffer.from(imageResponse.data, "binary").toString(
+          "base64",
+        );
+        console.log("✅ Image downloaded and converted to base64");
         return `data:image/png;base64,${base64}`;
       } else {
-        throw new Error('Image generation completed but no image URLs returned');
+        throw new Error(
+          "Image generation completed but no image URLs returned",
+        );
       }
-    } else if (currentStatus === 'failed') {
-      throw new Error(`Image generation failed: ${statusData.failed_message || 'unknown error'}`);
+    } else if (currentStatus === "failed") {
+      throw new Error(
+        `Image generation failed: ${statusData.failed_message || "unknown error"}`,
+      );
     } else {
       console.log(`⏳ Still processing... Status: ${currentStatus}`);
     }
   }
-  
-  throw new Error('Image generation timed out');
+
+  throw new Error("Image generation timed out");
 };
 
 // Modified version for avatar generation that returns both base64 and original URL
 const generateWithA2ETextToImageForAvatar = async (params) => {
-  console.log('🎨 === A2E TEXT-TO-IMAGE FOR AVATAR START ===');
-  console.log('📝 Prompt:', params.prompt);
-  
+  console.log("🎨 === A2E TEXT-TO-IMAGE FOR AVATAR START ===");
+  console.log("📝 Prompt:", params.prompt);
+
   let config = IMAGE_APIS.a2eTextToImage;
-  console.log('🔗 Primary base URL:', config.baseUrl);
-  
+  console.log("🔗 Primary base URL:", config.baseUrl);
+
   // Use default dimensions if not provided
   const width = params.width || 1024;
   const height = params.height || 1024;
-  
+
   let response;
-  
+
   const fallbackUrls = [
     config.baseUrl,
-    'https://video.a2e.com.cn/api/v1',
-    'https://api.a2e.ai/api/v1',
-    'https://api.avatar2everyone.com/api/v1'
+    "https://video.a2e.com.cn/api/v1",
+    "https://api.a2e.ai/api/v1",
+    "https://api.avatar2everyone.com/api/v1",
   ];
-  
+
   let lastError = null;
   let success = false;
-  
+
   for (let i = 0; i < fallbackUrls.length && !success; i++) {
     const currentUrl = fallbackUrls[i];
-    console.log(`📡 Trying endpoint ${i + 1}/${fallbackUrls.length}: ${currentUrl}`);
-    
+    console.log(
+      `📡 Trying endpoint ${i + 1}/${fallbackUrls.length}: ${currentUrl}`,
+    );
+
     try {
-      response = await withImageRetries(() => axios.post(
-        `${currentUrl}/userText2image/start`,
-        {
-          name: "Omni-AI Generated Image for Avatar",
-          prompt: params.prompt,
-          negative_prompt: params.negativePrompt || '',
-          req_key: "high_aes_general_v21_L", // General style
-          width: width,
-          height: height
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${config.apiKey}`,
-            'Content-Type': 'application/json'
+      response = await withImageRetries(() =>
+        axios.post(
+          `${currentUrl}/userText2image/start`,
+          {
+            name: "Omni-AI Generated Image for Avatar",
+            prompt: params.prompt,
+            negative_prompt: params.negativePrompt || "",
+            req_key: "high_aes_general_v21_L", // General style
+            width: width,
+            height: height,
           },
-          timeout: 120000
-        }
-      ));
-      
+          {
+            headers: {
+              Authorization: `Bearer ${config.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 120000,
+          },
+        ),
+      );
+
       console.log(`✅ Endpoint ${i + 1} successful: ${currentUrl}`);
       config = { ...config, baseUrl: currentUrl };
       success = true;
-      
     } catch (error) {
       console.log(`⚠️ Endpoint ${i + 1} failed:`, error.message);
       lastError = error;
-      
+
       // Add delay between attempts
       if (i < fallbackUrls.length - 1) {
-        console.log('⏳ Waiting 2 seconds before trying next endpoint...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log("⏳ Waiting 2 seconds before trying next endpoint...");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
   }
-  
+
   if (!success) {
-    console.log('❌ All endpoints failed');
-    throw new Error(`A2E API completely unreachable. Last error: ${lastError?.message || 'Unknown error'}`);
+    console.log("❌ All endpoints failed");
+    throw new Error(
+      `A2E API completely unreachable. Last error: ${lastError?.message || "Unknown error"}`,
+    );
   }
 
-  console.log('📨 Response code:', response.data.code);
-  console.log('📨 Response data:', JSON.stringify(response.data, null, 2));
+  console.log("📨 Response code:", response.data.code);
+  console.log("📨 Response data:", JSON.stringify(response.data, null, 2));
 
   if (response.data.code !== 0) {
-    console.error('A2E Text-to-Image API Error:', response.data);
-    throw new Error(`A2E API Error: ${response.data.message || 'Unknown error'}`);
+    console.error("A2E Text-to-Image API Error:", response.data);
+    throw new Error(
+      `A2E API Error: ${response.data.message || "Unknown error"}`,
+    );
   }
 
   const responseData = response.data.data;
   const currentStatus = responseData.current_status;
-  console.log('📊 Current status:', currentStatus);
+  console.log("📊 Current status:", currentStatus);
 
   let originalImageUrl = null;
 
   // Check if image is already completed (synchronous response)
-  if (currentStatus === 'completed' && responseData.image_urls && responseData.image_urls.length > 0) {
-    console.log('✅ Image generation completed immediately!');
+  if (
+    currentStatus === "completed" &&
+    responseData.image_urls &&
+    responseData.image_urls.length > 0
+  ) {
+    console.log("✅ Image generation completed immediately!");
     originalImageUrl = responseData.image_urls[0];
-    console.log('🔗 Original A2E Image URL:', originalImageUrl);
-    
+    console.log("🔗 Original A2E Image URL:", originalImageUrl);
+
     // Fetch the image content from the URL provided by A2E
-    const imageResponse = await axios.get(originalImageUrl, { responseType: 'arraybuffer' });
-    const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
-    console.log('✅ Image downloaded and converted to base64');
-    
+    const imageResponse = await axios.get(originalImageUrl, {
+      responseType: "arraybuffer",
+    });
+    const base64 = Buffer.from(imageResponse.data, "binary").toString("base64");
+    console.log("✅ Image downloaded and converted to base64");
+
     return {
       base64: `data:image/png;base64,${base64}`,
       originalUrl: originalImageUrl,
-      taskId: responseData._id // Include task ID for potential quickAddAvatar
+      taskId: responseData._id, // Include task ID for potential quickAddAvatar
     };
   }
 
   // If not completed immediately, poll for completion
   const taskId = responseData._id;
-  console.log('🆔 Task ID:', taskId);
-  console.log('⏳ Image not ready immediately, starting polling...');
-  
-  for (let i = 0; i < 60; i++) { // 5 minutes total
+  console.log("🆔 Task ID:", taskId);
+  console.log("⏳ Image not ready immediately, starting polling...");
+
+  for (let i = 0; i < 60; i++) {
+    // 5 minutes total
     console.log(`🔄 Polling attempt ${i + 1}/60...`);
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
     let statusData = null;
-    
+
     try {
       // Check the task status using the task ID
-      const statusResponse = await withImageRetries(() => axios.get(
-        `${config.baseUrl}/userText2image/${taskId}`,
-        { headers: { 'Authorization': `Bearer ${config.apiKey}` } }
-      ));
-      
-      console.log(`📊 Status response ${i + 1}:`, JSON.stringify(statusResponse.data, null, 2));
+      const statusResponse = await withImageRetries(() =>
+        axios.get(`${config.baseUrl}/userText2image/${taskId}`, {
+          headers: { Authorization: `Bearer ${config.apiKey}` },
+        }),
+      );
+
+      console.log(
+        `📊 Status response ${i + 1}:`,
+        JSON.stringify(statusResponse.data, null, 2),
+      );
       statusData = statusResponse.data.data || statusResponse.data;
-      
     } catch (statusError) {
       console.log(`⚠️ Status check ${i + 1} failed:`, statusError.message);
       continue;
     }
-    
+
     const currentStatus = statusData?.current_status;
     console.log(`📊 Current status: ${currentStatus}`);
-    
-    if (currentStatus === 'completed') {
+
+    if (currentStatus === "completed") {
       if (statusData.image_urls && statusData.image_urls.length > 0) {
         originalImageUrl = statusData.image_urls[0];
-        console.log('✅ Image generation completed! Original URL:', originalImageUrl);
-        
+        console.log(
+          "✅ Image generation completed! Original URL:",
+          originalImageUrl,
+        );
+
         // Fetch the image content from the URL provided by A2E
-        const imageResponse = await axios.get(originalImageUrl, { responseType: 'arraybuffer' });
-        const base64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
-        console.log('✅ Image downloaded and converted to base64');
-        
+        const imageResponse = await axios.get(originalImageUrl, {
+          responseType: "arraybuffer",
+        });
+        const base64 = Buffer.from(imageResponse.data, "binary").toString(
+          "base64",
+        );
+        console.log("✅ Image downloaded and converted to base64");
+
         return {
           base64: `data:image/png;base64,${base64}`,
           originalUrl: originalImageUrl,
-          taskId: taskId // Include task ID for potential quickAddAvatar
+          taskId: taskId, // Include task ID for potential quickAddAvatar
         };
       } else {
-        throw new Error('Image generation completed but no image URLs returned');
+        throw new Error(
+          "Image generation completed but no image URLs returned",
+        );
       }
-    } else if (currentStatus === 'failed') {
-      throw new Error(`Image generation failed: ${statusData.failed_message || 'unknown error'}`);
+    } else if (currentStatus === "failed") {
+      throw new Error(
+        `Image generation failed: ${statusData.failed_message || "unknown error"}`,
+      );
     } else {
       console.log(`⏳ Still processing... Status: ${currentStatus}`);
     }
   }
-  
-  throw new Error('Image generation timed out');
-};
 
+  throw new Error("Image generation timed out");
+};
 
 // A2E image-to-video integration
 const generateWithA2EImageToVideo = async (params) => {
@@ -748,21 +831,23 @@ const generateWithA2EImageToVideo = async (params) => {
       name: "Omni-AI Generated Video",
       gender: "female", // Assuming a default gender for video generation
       image_url: params.imageUrl, // Assuming the image URL is passed in params
-      image_backgroud_color: 'rgb(255,255,255)'
+      image_backgroud_color: "rgb(255,255,255)",
     },
     {
       headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
       },
-      timeout: 600000 // Increased timeout for A2E
-    }
+      timeout: 600000, // Increased timeout for A2E
+    },
   );
 
-  console.log('A2E API Response:', JSON.stringify(response.data, null, 2));
+  console.log("A2E API Response:", JSON.stringify(response.data, null, 2));
 
   if (response.data.code !== 0 || !response.data.data) {
-    throw new Error(`A2E API Error: ${response.data.message || 'Unknown error'}`);
+    throw new Error(
+      `A2E API Error: ${response.data.message || "Unknown error"}`,
+    );
   }
 
   return response.data.data.video_url; // Assuming the API returns a video URL
@@ -777,20 +862,26 @@ const a2eNanoBananaStartInternal = async (payload) => {
       payload,
       {
         headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
         },
-        timeout: 120000
-      }
+        timeout: 120000,
+      },
     );
 
     if (response.data.code !== 0) {
-      console.error('A2E NanoBanana API error payload:', response.data);
-      throw new Error(`A2E NanoBanana error: ${response.data.message || JSON.stringify(response.data)}`);
+      console.error("A2E NanoBanana API error payload:", response.data);
+      throw new Error(
+        `A2E NanoBanana error: ${response.data.message || JSON.stringify(response.data)}`,
+      );
     }
     return response.data.data; // Task info
   } catch (err) {
-    console.error('A2E NanoBanana axios error:', { status: err.response?.status, data: err.response?.data, message: err.message });
+    console.error("A2E NanoBanana axios error:", {
+      status: err.response?.status,
+      data: err.response?.data,
+      message: err.message,
+    });
     throw err;
   }
 };
@@ -798,50 +889,56 @@ const a2eNanoBananaStartInternal = async (payload) => {
 // Helper function to get OpenAI image size
 const getOpenAISize = (aspectRatio) => {
   switch (aspectRatio) {
-    case '1:1':
-      return '1024x1024';
-    case '4:3':
-      return '1024x768';
-    case '3:4':
-      return '768x1024';
-    case '16:9':
-      return '1024x576';
-    case '9:16':
-      return '576x1024';
+    case "1:1":
+      return "1024x1024";
+    case "4:3":
+      return "1024x768";
+    case "3:4":
+      return "768x1024";
+    case "16:9":
+      return "1024x576";
+    case "9:16":
+      return "576x1024";
     default:
-      return '1024x1024';
+      return "1024x1024";
   }
 };
 
 // Hugging Face text-to-image (SDXL)
 const hfTextToImage = async (req, res) => {
   try {
-    console.log('=== HF TEXT TO IMAGE DEBUG BOX ===');
-    console.log('Function: hfTextToImage');
-    console.log('Request body:', req.body);
-    console.log('User ID:', req.user?._id);
-    console.log('==================================');
-    
-    const modelParam = req.body?.model || 'sdxl';
-    const hfToken = modelParam === 'sdxl'
-      ? (process.env.HF_TOKEN_SDXL || process.env.HF_TOKEN)
-      : (process.env.HF_TOKEN || process.env.HF_TOKEN_SDXL);
-    if (!hfToken) return res.status(400).json({ success: false, message: 'HF_TOKEN is not set' });
+    console.log("=== HF TEXT TO IMAGE DEBUG BOX ===");
+    console.log("Function: hfTextToImage");
+    console.log("Request body:", req.body);
+    console.log("User ID:", req.user?._id);
+    console.log("==================================");
+
+    const modelParam = req.body?.model || "sdxl";
+    const hfToken =
+      modelParam === "sdxl"
+        ? process.env.HF_TOKEN_SDXL || process.env.HF_TOKEN
+        : process.env.HF_TOKEN || process.env.HF_TOKEN_SDXL;
+    if (!hfToken)
+      return res
+        .status(400)
+        .json({ success: false, message: "HF_TOKEN is not set" });
 
     const {
       prompt,
-      negativePrompt = '',
+      negativePrompt = "",
       width = 1024,
       height = 1024,
       steps = 30,
       guidance = 7.5,
       seed,
       style,
-      quality
+      quality,
     } = req.body || {};
 
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ success: false, message: 'prompt is required' });
+    if (!prompt || typeof prompt !== "string") {
+      return res
+        .status(400)
+        .json({ success: false, message: "prompt is required" });
     }
 
     // Initialize Hugging Face inference
@@ -849,47 +946,63 @@ const hfTextToImage = async (req, res) => {
 
     // Generate image using Hugging Face
     const blob = await hf.textToImage({
-      model: modelParam === 'sdxl' ? 'stabilityai/stable-diffusion-xl-base-1.0' : 'runwayml/stable-diffusion-v1-5',
+      model:
+        modelParam === "sdxl"
+          ? "stabilityai/stable-diffusion-xl-base-1.0"
+          : "runwayml/stable-diffusion-v1-5",
       inputs: prompt,
       parameters: {
-        negative_prompt: negativePrompt || '',
+        negative_prompt: negativePrompt || "",
         width,
         height,
         num_inference_steps: steps,
         guidance_scale: guidance,
-        ...(seed !== undefined ? { seed } : {})
-      }
+        ...(seed !== undefined ? { seed } : {}),
+      },
     });
 
     // Convert blob to base64
     const arrayBuffer = await blob.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
     const dataUrl = `data:image/png;base64,${base64}`;
 
     // Save image to database
     let savedImage = null;
     try {
-      const imageBuffer = Buffer.from(base64, 'base64');
-      
+      const imageBuffer = Buffer.from(base64, "base64");
+
       // Determine image format
       const getImageFormat = (buffer) => {
-        if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
-          return { format: 'png', extension: 'png', mimeType: 'image/png' };
-        } else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
-          return { format: 'jpeg', extension: 'jpg', mimeType: 'image/jpeg' };
-        } else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
-          return { format: 'gif', extension: 'gif', mimeType: 'image/gif' };
+        if (
+          buffer[0] === 0x89 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x4e &&
+          buffer[3] === 0x47
+        ) {
+          return { format: "png", extension: "png", mimeType: "image/png" };
+        } else if (
+          buffer[0] === 0xff &&
+          buffer[1] === 0xd8 &&
+          buffer[2] === 0xff
+        ) {
+          return { format: "jpeg", extension: "jpg", mimeType: "image/jpeg" };
+        } else if (
+          buffer[0] === 0x47 &&
+          buffer[1] === 0x49 &&
+          buffer[2] === 0x46
+        ) {
+          return { format: "gif", extension: "gif", mimeType: "image/gif" };
         } else {
-          return { format: 'png', extension: 'png', mimeType: 'image/png' };
+          return { format: "png", extension: "png", mimeType: "image/png" };
         }
       };
-      
+
       const imageFormat = getImageFormat(imageBuffer);
-      
+
       savedImage = await Image.create({
         user: req.user._id,
         prompt,
-        negativePrompt: negativePrompt || '',
+        negativePrompt: negativePrompt || "",
         imageData: imageBuffer,
         contentType: imageFormat.mimeType,
         filename: `hf-generated-${Date.now()}.${imageFormat.extension}`,
@@ -897,29 +1010,29 @@ const hfTextToImage = async (req, res) => {
         width,
         height,
         settings: {
-          style: style || 'realistic',
-          quality: quality || 'high',
+          style: style || "realistic",
+          quality: quality || "high",
           aspectRatio: `${width}:${height}`,
           seed,
           model: modelParam,
           steps,
-          guidance
+          guidance,
         },
         metadata: {
-          provider: 'huggingface',
+          provider: "huggingface",
           generationTime: 0,
-          originalPrompt: prompt
-        }
+          originalPrompt: prompt,
+        },
       });
-      
-      console.log('HF Image saved to database with ID:', savedImage._id);
+
+      console.log("HF Image saved to database with ID:", savedImage._id);
     } catch (error) {
-      console.error('Error saving HF image to database:', error);
+      console.error("Error saving HF image to database:", error);
     }
 
     res.status(200).json({
       success: true,
-      message: 'Image generated successfully',
+      message: "Image generated successfully",
       data: {
         image: savedImage ? savedImage.getImageUrl() : dataUrl,
         imageId: savedImage ? savedImage._id : null,
@@ -933,12 +1046,14 @@ const hfTextToImage = async (req, res) => {
         model: modelParam,
         style,
         quality,
-        aspectRatio: `${width}:${height}`
-      }
+        aspectRatio: `${width}:${height}`,
+      },
     });
   } catch (error) {
-    console.error('HF textToImage error:', error);
-    return res.status(500).json({ success: false, message: error?.message || 'Generation failed' });
+    console.error("HF textToImage error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: error?.message || "Generation failed" });
   }
 };
 
@@ -946,66 +1061,86 @@ const hfTextToImage = async (req, res) => {
 const hfControlNet = async (req, res) => {
   try {
     const hfToken = process.env.HF_TOKEN_CONTROLNET || process.env.HF_TOKEN;
-    if (!hfToken) return res.status(400).json({ success: false, message: 'HF_TOKEN is not set' });
-    if (!req.file) return res.status(400).json({ success: false, message: 'controlImage file is required' });
+    if (!hfToken)
+      return res
+        .status(400)
+        .json({ success: false, message: "HF_TOKEN is not set" });
+    if (!req.file)
+      return res
+        .status(400)
+        .json({ success: false, message: "controlImage file is required" });
 
-    const prompt = req.body.prompt || '';
+    const prompt = req.body.prompt || "";
     const steps = Number(req.body.steps ?? 30);
     const guidance = Number(req.body.guidance ?? 7.0);
     const cScale = Number(req.body.cScale ?? 1.0);
-    const seed = req.body.seed !== undefined ? Number(req.body.seed) : undefined;
+    const seed =
+      req.body.seed !== undefined ? Number(req.body.seed) : undefined;
 
     // Initialize Hugging Face inference
     const hf = new HfInference(hfToken);
 
     // Convert uploaded file to base64
-    const controlImageBase64 = req.file.buffer.toString('base64');
+    const controlImageBase64 = req.file.buffer.toString("base64");
     const controlImageDataUrl = `data:${req.file.mimetype};base64,${controlImageBase64}`;
 
     // Generate image using Hugging Face ControlNet
     const blob = await hf.imageToImage({
-      model: 'lllyasviel/sd-controlnet-canny',
+      model: "lllyasviel/sd-controlnet-canny",
       inputs: {
         image: controlImageDataUrl,
-        prompt: prompt
+        prompt: prompt,
       },
       parameters: {
         num_inference_steps: steps,
         guidance_scale: guidance,
         controlnet_conditioning_scale: cScale,
-        ...(seed !== undefined ? { seed } : {})
-      }
+        ...(seed !== undefined ? { seed } : {}),
+      },
     });
 
     // Convert blob to base64
     const arrayBuffer = await blob.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
     const dataUrl = `data:image/png;base64,${base64}`;
 
     // Save image to database
     let savedImage = null;
     try {
-      const imageBuffer = Buffer.from(base64, 'base64');
-      
+      const imageBuffer = Buffer.from(base64, "base64");
+
       // Determine image format
       const getImageFormat = (buffer) => {
-        if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
-          return { format: 'png', extension: 'png', mimeType: 'image/png' };
-        } else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
-          return { format: 'jpeg', extension: 'jpg', mimeType: 'image/jpeg' };
-        } else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
-          return { format: 'gif', extension: 'gif', mimeType: 'image/gif' };
+        if (
+          buffer[0] === 0x89 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x4e &&
+          buffer[3] === 0x47
+        ) {
+          return { format: "png", extension: "png", mimeType: "image/png" };
+        } else if (
+          buffer[0] === 0xff &&
+          buffer[1] === 0xd8 &&
+          buffer[2] === 0xff
+        ) {
+          return { format: "jpeg", extension: "jpg", mimeType: "image/jpeg" };
+        } else if (
+          buffer[0] === 0x47 &&
+          buffer[1] === 0x49 &&
+          buffer[2] === 0x46
+        ) {
+          return { format: "gif", extension: "gif", mimeType: "image/gif" };
         } else {
-          return { format: 'png', extension: 'png', mimeType: 'image/png' };
+          return { format: "png", extension: "png", mimeType: "image/png" };
         }
       };
-      
+
       const imageFormat = getImageFormat(imageBuffer);
-      
+
       savedImage = await Image.create({
         user: req.user._id,
         prompt,
-        negativePrompt: '',
+        negativePrompt: "",
         imageData: imageBuffer,
         contentType: imageFormat.mimeType,
         filename: `controlnet-generated-${Date.now()}.${imageFormat.extension}`,
@@ -1013,31 +1148,34 @@ const hfControlNet = async (req, res) => {
         width: 1024,
         height: 1024,
         settings: {
-          style: 'realistic',
-          quality: 'high',
-          aspectRatio: '1:1',
+          style: "realistic",
+          quality: "high",
+          aspectRatio: "1:1",
           seed,
-          model: 'controlnet',
+          model: "controlnet",
           steps,
-          guidance
+          guidance,
         },
         metadata: {
-          provider: 'huggingface',
+          provider: "huggingface",
           generationTime: 0,
           originalPrompt: prompt,
           controlScale: cScale,
-          controlImageSize: req.file.size
-        }
+          controlImageSize: req.file.size,
+        },
       });
-      
-      console.log('ControlNet Image saved to database with ID:', savedImage._id);
+
+      console.log(
+        "ControlNet Image saved to database with ID:",
+        savedImage._id,
+      );
     } catch (error) {
-      console.error('Error saving ControlNet image to database:', error);
+      console.error("Error saving ControlNet image to database:", error);
     }
 
     res.status(200).json({
       success: true,
-      message: 'Image generated successfully',
+      message: "Image generated successfully",
       data: {
         image: savedImage ? savedImage.getImageUrl() : dataUrl,
         imageId: savedImage ? savedImage._id : null,
@@ -1046,16 +1184,18 @@ const hfControlNet = async (req, res) => {
         guidance,
         controlScale: cScale,
         seed,
-        model: 'controlnet',
+        model: "controlnet",
         controlImageSize: req.file.size,
         width: 1024,
         height: 1024,
-        aspectRatio: '1:1'
-      }
+        aspectRatio: "1:1",
+      },
     });
   } catch (error) {
-    console.error('HF ControlNet error:', error);
-    return res.status(500).json({ success: false, message: error?.message || 'ControlNet failed' });
+    console.error("HF ControlNet error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: error?.message || "ControlNet failed" });
   }
 };
 
@@ -1064,29 +1204,29 @@ const hfControlNet = async (req, res) => {
 // @access  Public (but validates ownership via token)
 const getPublicImage = async (req, res) => {
   try {
-    console.log('=== PUBLIC IMAGE REQUEST ===');
-    console.log('Image ID:', req.params.id);
-    console.log('Request URL:', req.url);
-    console.log('Request headers:', req.headers);
-    console.log('Request method:', req.method);
-    
+    console.log("=== PUBLIC IMAGE REQUEST ===");
+    console.log("Image ID:", req.params.id);
+    console.log("Request URL:", req.url);
+    console.log("Request headers:", req.headers);
+    console.log("Request method:", req.method);
+
     const image = await Image.findById(req.params.id);
 
     if (!image) {
-      console.log('Image not found in database');
+      console.log("Image not found in database");
       return res.status(404).json({
         success: false,
-        message: 'Image not found'
+        message: "Image not found",
       });
     }
 
-    console.log('Image found:', {
+    console.log("Image found:", {
       id: image._id,
       prompt: image.prompt,
       size: image.size,
       contentType: image.contentType,
       bufferLength: image.imageData.length,
-      bufferStart: image.imageData.slice(0, 10).toString('hex')
+      bufferStart: image.imageData.slice(0, 10).toString("hex"),
     });
 
     // Optional: Add token-based validation for additional security
@@ -1094,31 +1234,31 @@ const getPublicImage = async (req, res) => {
     // and stored with user association for tracking purposes
 
     // Set CORS headers for image serving
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.set('Access-Control-Expose-Headers', 'Content-Type, Content-Length');
-    res.set('Content-Type', image.contentType);
-    res.set('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-    res.set('Content-Length', image.size);
-    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-    
-    console.log('Sending image data...');
-    console.log('Response headers being set:', {
-      'Content-Type': image.contentType,
-      'Content-Length': image.size,
-      'Cache-Control': 'public, max-age=31536000'
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.set("Access-Control-Expose-Headers", "Content-Type, Content-Length");
+    res.set("Content-Type", image.contentType);
+    res.set("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
+    res.set("Content-Length", image.size);
+    res.set("Cross-Origin-Resource-Policy", "cross-origin");
+
+    console.log("Sending image data...");
+    console.log("Response headers being set:", {
+      "Content-Type": image.contentType,
+      "Content-Length": image.size,
+      "Cache-Control": "public, max-age=31536000",
     });
-    
+
     res.send(image.imageData);
-    
-    console.log('Image served successfully');
+
+    console.log("Image served successfully");
   } catch (error) {
-    console.error('Get public image error:', error);
+    console.error("Get public image error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get image',
-      error: error.message
+      message: "Failed to get image",
+      error: error.message,
     });
   }
 };
@@ -1128,34 +1268,34 @@ const getPublicImage = async (req, res) => {
 // @access  Private
 const getImage = async (req, res) => {
   try {
-    console.log('=== GET IMAGE BY ID API CALLED ===');
-    console.log('Image ID:', req.params.id);
-    console.log('User ID:', req.user._id);
-    console.log('Request URL:', req.url);
-    console.log('Request path:', req.path);
-    
+    console.log("=== GET IMAGE BY ID API CALLED ===");
+    console.log("Image ID:", req.params.id);
+    console.log("User ID:", req.user._id);
+    console.log("Request URL:", req.url);
+    console.log("Request path:", req.path);
+
     const image = await Image.findOne({
       _id: req.params.id,
-      user: req.user._id
+      user: req.user._id,
     });
 
     if (!image) {
       return res.status(404).json({
         success: false,
-        message: 'Image not found'
+        message: "Image not found",
       });
     }
 
-    res.set('Content-Type', image.contentType);
-    res.set('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-    res.set('Content-Length', image.size);
+    res.set("Content-Type", image.contentType);
+    res.set("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
+    res.set("Content-Length", image.size);
     res.send(image.imageData);
   } catch (error) {
-    console.error('Get image error:', error);
+    console.error("Get image error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get image',
-      error: error.message
+      message: "Failed to get image",
+      error: error.message,
     });
   }
 };
@@ -1174,7 +1314,9 @@ const getUserImages = async (req, res) => {
 
     const total = await Image.countDocuments({ user: req.user._id });
 
-    console.log(`Found ${images.length} images for user ${req.user._id}, total: ${total}`);
+    console.log(
+      `Found ${images.length} images for user ${req.user._id}, total: ${total}`,
+    );
 
     res.status(200).json({
       success: true,
@@ -1183,15 +1325,15 @@ const getUserImages = async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
+        pages: Math.ceil(total / parseInt(limit)),
+      },
     });
   } catch (error) {
-    console.error('Get user images error:', error);
+    console.error("Get user images error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get images',
-      error: error.message
+      message: "Failed to get images",
+      error: error.message,
     });
   }
 };
@@ -1203,69 +1345,71 @@ const deleteImage = async (req, res) => {
   try {
     const image = await Image.findOneAndDelete({
       _id: req.params.id,
-      user: req.user._id
+      user: req.user._id,
     });
 
     if (!image) {
       return res.status(404).json({
         success: false,
-        message: 'Image not found'
+        message: "Image not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Image deleted successfully'
+      message: "Image deleted successfully",
     });
   } catch (error) {
-    console.error('Delete image error:', error);
+    console.error("Delete image error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete image',
-      error: error.message
+      message: "Failed to delete image",
+      error: error.message,
     });
   }
 };
 
-// @desc    Get all images for user
-// @route   GET /api/images
-// @access  Private
 const getAllImages = async (req, res) => {
   try {
-    console.log('=== GET ALL IMAGES API CALLED ===');
-    console.log('User ID:', req.user._id);
-    console.log('Query params:', req.query);
-    console.log('Request headers:', req.headers);
-    console.log('Authorization header:', req.headers.authorization);
-    
-    const { page = 1, limit = 50, sort = 'createdAt', order = 'desc' } = req.query;
-    
+    console.log("=== GET ALL IMAGES API CALLED ===");
+    console.log("User ID:", req.user._id);
+    console.log("Query params:", req.query);
+    console.log("Request headers:", req.headers);
+    console.log("Authorization header:", req.headers.authorization);
+
+    const {
+      page = 1,
+      limit = 50,
+      sort = "createdAt",
+      order = "desc",
+    } = req.query;
+
     const sortOptions = {};
-    sortOptions[sort] = order === 'desc' ? -1 : 1;
-    
+    sortOptions[sort] = order === "desc" ? -1 : 1;
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const images = await Image.find({ user: req.user._id })
       .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit))
-      .select('-imageData') // Exclude image data for list view
+      .select("-imageData") // Exclude image data for list view
       .lean();
-    
-    console.log('Found images:', images.length);
-    
+
+    console.log("Found images:", images.length);
+
     const totalImages = await Image.countDocuments({ user: req.user._id });
-    
+
     // Add imageUrl to each image
-    const imagesWithUrls = images.map(image => ({
+    const imagesWithUrls = images.map((image) => ({
       ...image,
-      imageUrl: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/images/public/${image._id}`
+      imageUrl: `${process.env.API_BASE_URL || "http://localhost:3001"}/api/images/public/${image._id}`,
     }));
-    
-    console.log('Sample image with URL:', imagesWithUrls[0]);
-    console.log('Total images found:', totalImages);
-    console.log('Images being returned:', imagesWithUrls.length);
-    
+
+    console.log("Sample image with URL:", imagesWithUrls[0]);
+    console.log("Total images found:", totalImages);
+    console.log("Images being returned:", imagesWithUrls.length);
+
     const response = {
       success: true,
       data: imagesWithUrls,
@@ -1274,18 +1418,67 @@ const getAllImages = async (req, res) => {
         totalPages: Math.ceil(totalImages / parseInt(limit)),
         totalImages,
         hasNext: skip + images.length < totalImages,
-        hasPrev: parseInt(page) > 1
-      }
+        hasPrev: parseInt(page) > 1,
+      },
     };
-    
-    console.log('Sending response:', JSON.stringify(response, null, 2));
+
+    console.log("Sending response:", JSON.stringify(response, null, 2));
     res.status(200).json(response);
   } catch (error) {
-    console.error('Get all images error:', error);
+    console.error("Get all images error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get images',
-      error: error.message
+      message: "Failed to get images",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get public images for explore gallery
+// @route   GET /api/images/explore
+// @access  Public
+const getPublicImages = async (req, res) => {
+  try {
+    const { limit = 20, page = 1 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Find users who have enabled public sharing
+    const publicUsers = await User.find({ shareImagesPublicly: true }).select(
+      "_id",
+    );
+    const publicUserIds = publicUsers.map((user) => user._id);
+
+    const images = await Image.find({ user: { $in: publicUserIds } })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .select("-imageData") // Exclude image data for list view
+      .populate("user", "username profileImage") // Populate user info
+      .lean();
+
+    const total = await Image.countDocuments({ user: { $in: publicUserIds } });
+
+    const imagesWithUrls = images.map((image) => ({
+      ...image,
+      imageUrl: `${process.env.API_BASE_URL || "http://localhost:3001"}/api/images/public/${image._id}`,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: imagesWithUrls,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error("Get public images error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get public images",
+      error: error.message,
     });
   }
 };
@@ -1294,7 +1487,9 @@ const getAllImages = async (req, res) => {
 const a2eImageToVideo = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'Image file is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Image file is required" });
     }
 
     const { name, gender } = req.body;
@@ -1302,24 +1497,31 @@ const a2eImageToVideo = async (req, res) => {
     // Upload image to a temporary storage and get the URL
     const imageUrl = await uploadImageAndGetUrl(req.file);
 
-    const videoUrl = await generateWithA2EImageToVideo({ imageUrl, name, gender });
+    const videoUrl = await generateWithA2EImageToVideo({
+      imageUrl,
+      name,
+      gender,
+    });
 
     res.status(200).json({
       success: true,
-      message: 'Video generation started successfully',
+      message: "Video generation started successfully",
       data: {
-        videoUrl
-      }
+        videoUrl,
+      },
     });
   } catch (error) {
-    console.error('A2E imageToVideo error:', error);
-    return res.status(500).json({ success: false, message: error?.message || 'Video generation failed' });
+    console.error("A2E imageToVideo error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || "Video generation failed",
+    });
   }
 };
 
 // Local upload helper
 const uploadImageAndGetUrl = async (file) => {
-  console.log('Uploading image:', file.originalname);
+  console.log("Uploading image:", file.originalname);
   return await saveBufferToUploads(file.originalname, file.buffer);
 };
 
@@ -1331,8 +1533,8 @@ const a2eImageEdit = async (req, res) => {
     const { prompt, name } = req.body || {};
 
     const payload = {
-      name: name || 'A2E Edit',
-      prompt: prompt || ''
+      name: name || "A2E Edit",
+      prompt: prompt || "",
     };
 
     // Support editing with an input image via multipart or URL
@@ -1351,8 +1553,14 @@ const a2eImageEdit = async (req, res) => {
     const task = await a2eNanoBananaStartInternal(payload);
     return res.status(202).json({ success: true, data: task });
   } catch (error) {
-    console.error('A2E image edit error:', { status: error.response?.status, data: error.response?.data, message: error.message });
-    return res.status(500).json({ success: false, message: error?.message || 'A2E edit failed' });
+    console.error("A2E image edit error:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+    return res
+      .status(500)
+      .json({ success: false, message: error?.message || "A2E edit failed" });
   }
 };
 
@@ -1368,8 +1576,9 @@ module.exports = {
   getUserImages,
   deleteImage,
   getAllImages,
+  getPublicImages,
   a2eImageToVideo,
   a2eImageEdit,
-  generateWithA2ETextToImage,  // Export for reuse in avatar controller
-  generateWithA2ETextToImageForAvatar  // Export for avatar generation with original URL
+  generateWithA2ETextToImage, // Export for reuse in avatar controller
+  generateWithA2ETextToImageForAvatar, // Export for avatar generation with original URL
 };

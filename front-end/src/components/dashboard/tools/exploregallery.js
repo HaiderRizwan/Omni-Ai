@@ -1,25 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, 
-  Share2, 
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  X,
+  Share2,
   Download,
-  Search, 
+  Search,
   ChevronLeft,
   ChevronRight,
-  Eye
-} from 'lucide-react';
-import safeLocalStorage from '../../../utils/localStorage';
+  Eye,
+} from "lucide-react";
+import safeLocalStorage from "../../../utils/localStorage";
 
 const Gallery = () => {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-
+  const apiBase = process.env.REACT_APP_API_URL || "http://localhost:3001";
 
   useEffect(() => {
     fetchImages();
@@ -30,33 +29,28 @@ const Gallery = () => {
       setLoading(true);
       setError(null);
 
-      const token = safeLocalStorage.getItem('token');
-      if (!token) {
-        setError('Please log in to view images');
-        return;
-      }
-
-      const response = await fetch(`${apiBase}/api/images`, {
-        method: 'GET',
+      const response = await fetch(`${apiBase}/api/images/explore`, {
+        method: "GET",
         headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch images: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Failed to fetch images: ${response.status} ${response.statusText}`,
+        );
       }
 
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         setImages(data.data);
       } else {
-        setError('Failed to load images');
+        setError("Failed to load images");
       }
     } catch (err) {
-      console.error('Error fetching images:', err);
+      console.error("Error fetching images:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -70,27 +64,28 @@ const Gallery = () => {
   // Note: Explore is read-only (no delete). Deletion is available in My Images gallery.
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   // Filter and search images
-  const filteredImages = images.filter(image => {
-    const matchesSearch = image.prompt?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         image.title?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredImages = images.filter((image) => {
+    const matchesSearch =
+      image.prompt?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      image.title?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
@@ -110,7 +105,7 @@ const Gallery = () => {
       const response = await fetch(getImageUrl(image._id));
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `image-${image._id}.png`;
       document.body.appendChild(a);
@@ -118,7 +113,7 @@ const Gallery = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download failed:', error);
+      console.error("Download failed:", error);
     }
   };
 
@@ -128,10 +123,10 @@ const Gallery = () => {
         await navigator.share({
           title: image.prompt,
           text: `Check out this AI-generated image: ${image.prompt}`,
-          url: getImageUrl(image._id)
+          url: getImageUrl(image._id),
         });
       } catch (error) {
-        console.error('Share failed:', error);
+        console.error("Share failed:", error);
       }
     } else {
       // Fallback: copy to clipboard
@@ -140,14 +135,18 @@ const Gallery = () => {
   };
 
   const prevImage = () => {
-    const currentIndex = sortedImages.findIndex(img => img._id === selectedImage._id);
+    const currentIndex = sortedImages.findIndex(
+      (img) => img._id === selectedImage._id,
+    );
     if (currentIndex > 0) {
       setSelectedImage(sortedImages[currentIndex - 1]);
     }
   };
 
   const nextImage = () => {
-    const currentIndex = sortedImages.findIndex(img => img._id === selectedImage._id);
+    const currentIndex = sortedImages.findIndex(
+      (img) => img._id === selectedImage._id,
+    );
     if (currentIndex < sortedImages.length - 1) {
       setSelectedImage(sortedImages[currentIndex + 1]);
     }
@@ -160,8 +159,12 @@ const Gallery = () => {
           <div className="w-16 h-16 bg-black/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-spin">
             <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">Loading Images</h3>
-          <p className="text-gray-400">Please wait while we fetch your images...</p>
+          <h3 className="text-xl font-semibold text-white mb-2">
+            Loading Images
+          </h3>
+          <p className="text-gray-400">
+            Please wait while we fetch your images...
+          </p>
         </div>
       </div>
     );
@@ -174,7 +177,9 @@ const Gallery = () => {
           <div className="w-16 h-16 bg-black/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <X className="w-8 h-8 text-black" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">Error Loading Images</h3>
+          <h3 className="text-xl font-semibold text-white mb-2">
+            Error Loading Images
+          </h3>
           <p className="text-gray-400 mb-4">{error}</p>
           <button
             onClick={fetchImages}
@@ -196,16 +201,14 @@ const Gallery = () => {
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
               <div>
-                <h1 className="text-3xl font-bold text-white">
-                  Explore
-                </h1>
+                <h1 className="text-3xl font-bold text-white">Explore</h1>
                 <p className="text-gray-400 text-sm font-medium">
                   {sortedImages.length} images
                 </p>
               </div>
             </div>
           </div>
-          
+
           {/* Right Section - Controls */}
           <div className="flex items-center gap-4">
             {/* Search */}
@@ -219,8 +222,6 @@ const Gallery = () => {
                 className="pl-12 pr-4 w-12 h-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 focus:bg-white/10 transition-all duration-200 backdrop-blur-sm"
               />
             </div>
-
-
           </div>
         </div>
       </div>
@@ -233,8 +234,12 @@ const Gallery = () => {
               <div className="w-16 h-16 bg-gray-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Eye className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">No Images Found</h3>
-              <p className="text-gray-400">Start creating images to see them here!</p>
+              <h3 className="text-xl font-semibold text-white mb-2">
+                No Images Found
+              </h3>
+              <p className="text-gray-400">
+                Start creating images to see them here!
+              </p>
             </div>
           </div>
         ) : (
@@ -244,10 +249,10 @@ const Gallery = () => {
               layout
               className="grid grid-cols-3 gap-px w-full auto-rows-max m-0 p-0"
               style={{
-                gap: '1px',
-                margin: '0px',
-                padding: '0px',
-                gridTemplateColumns: 'repeat(3, 1fr)'
+                gap: "1px",
+                margin: "0px",
+                padding: "0px",
+                gridTemplateColumns: "repeat(3, 1fr)",
               }}
             >
               <AnimatePresence>
@@ -261,17 +266,17 @@ const Gallery = () => {
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                     className="group relative overflow-hidden cursor-pointer transition-all duration-300 w-full"
                     style={{
-                      margin: '0px',
-                      padding: '0px',
-                      border: 'none'
+                      margin: "0px",
+                      padding: "0px",
+                      border: "none",
                     }}
                     onClick={() => handleImageClick(image)}
                   >
-                    <div 
+                    <div
                       className="aspect-square relative w-full m-0 p-0"
                       style={{
-                        margin: '0px',
-                        padding: '0px'
+                        margin: "0px",
+                        padding: "0px",
                       }}
                     >
                       <img
@@ -279,14 +284,14 @@ const Gallery = () => {
                         alt={image.prompt}
                         className="w-full h-full object-cover block"
                         style={{
-                          margin: '0px',
-                          padding: '0px',
-                          border: 'none',
-                          display: 'block'
+                          margin: "0px",
+                          padding: "0px",
+                          border: "none",
+                          display: "block",
                         }}
                         loading="lazy"
                       />
-                      
+
                       {/* Overlay */}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-4">
                         <div className="flex justify-end gap-2">
@@ -312,9 +317,12 @@ const Gallery = () => {
                           </button>
                           {/* No delete in Explore */}
                         </div>
-                        
+
                         <div className="text-white">
-                          <p className="text-sm font-medium truncate mb-1" title={image.prompt}>
+                          <p
+                            className="text-sm font-medium truncate mb-1"
+                            title={image.prompt}
+                          >
                             {image.prompt}
                           </p>
                           <p className="text-xs text-gray-300">
@@ -327,7 +335,6 @@ const Gallery = () => {
                 ))}
               </AnimatePresence>
             </motion.div>
-
           </>
         )}
       </div>
@@ -351,7 +358,10 @@ const Gallery = () => {
             >
               {/* Modal Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10">
-                <h3 className="text-white font-medium truncate flex-1 mr-4" title={selectedImage.prompt}>
+                <h3
+                  className="text-white font-medium truncate flex-1 mr-4"
+                  title={selectedImage.prompt}
+                >
                   {selectedImage.prompt}
                 </h3>
                 <div className="flex items-center gap-2">
@@ -387,7 +397,7 @@ const Gallery = () => {
                   alt={selectedImage.prompt}
                   className="max-w-full max-h-[60vh] object-contain mx-auto"
                 />
-                
+
                 {/* Navigation Arrows */}
                 {sortedImages.length > 1 && (
                   <>
@@ -412,21 +422,29 @@ const Gallery = () => {
                 <div className="grid grid-cols-2 gap-4 text-sm text-gray-400">
                   <div>
                     <span className="text-gray-300">Size:</span>
-                    <span className="ml-2">{selectedImage.width}×{selectedImage.height}</span>
+                    <span className="ml-2">
+                      {selectedImage.width}×{selectedImage.height}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-300">File Size:</span>
-                    <span className="ml-2">{formatFileSize(selectedImage.size)}</span>
+                    <span className="ml-2">
+                      {formatFileSize(selectedImage.size)}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-300">Format:</span>
                     <span className="ml-2">
-                      {selectedImage.contentType?.split('/')[1]?.toUpperCase() || 'Unknown'}
+                      {selectedImage.contentType
+                        ?.split("/")[1]
+                        ?.toUpperCase() || "Unknown"}
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-300">Created:</span>
-                    <span className="ml-2">{formatDate(selectedImage.createdAt)}</span>
+                    <span className="ml-2">
+                      {formatDate(selectedImage.createdAt)}
+                    </span>
                   </div>
                 </div>
               </div>
