@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import FormattedMessage from '../ui/FormattedMessage';
 import { motion } from 'framer-motion';
 import safeLocalStorage from '../../../utils/localStorage';
-import { 
-  Send, 
-  Download, 
-  RefreshCw, 
+import {
+  Send,
+  Download,
+  RefreshCw,
   User,
   Palette,
   Settings,
@@ -104,65 +104,65 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
   // Build character-specific prompt for better avatar generation
   const buildCharacterPrompt = (basePrompt, settings, customization) => {
     let prompt = `character portrait, ${basePrompt}`;
-    
+
     // Add character-specific details
     if (settings.gender !== 'any') {
       prompt += `, ${settings.gender}`;
     }
-    
+
     if (settings.age !== 'any') {
       prompt += `, ${settings.age}`;
     }
-    
+
     if (settings.ethnicity !== 'any') {
       prompt += `, ${settings.ethnicity}`;
     }
-    
+
     // Add physical characteristics
     if (customization.skinTone) {
       const skinTone = getSkinToneDescription(customization.skinTone);
       if (skinTone) prompt += `, ${skinTone} skin`;
     }
-    
+
     if (customization.hairColor) {
       const hairColor = getHairColorDescription(customization.hairColor);
       if (hairColor) prompt += `, ${hairColor} hair`;
     }
-    
+
     if (settings.hairStyle !== 'any') {
       prompt += `, ${settings.hairStyle} hair`;
     }
-    
+
     if (customization.eyeColor) {
       const eyeColor = getEyeColorDescription(customization.eyeColor);
       if (eyeColor) prompt += `, ${eyeColor} eyes`;
     }
-    
+
     if (settings.build !== 'average') {
       prompt += `, ${settings.build} build`;
     }
-    
+
     // Add style and expression
     if (settings.style !== 'realistic') {
       prompt += `, ${settings.style} style`;
     }
-    
+
     if (settings.expression !== 'neutral') {
       prompt += `, ${settings.expression} expression`;
     }
-    
+
     if (settings.clothing !== 'casual') {
       prompt += `, wearing ${settings.clothing}`;
     }
-    
+
     // Add background
     if (settings.background !== 'transparent') {
       prompt += `, ${settings.background} background`;
     }
-    
+
     // Add character-specific keywords for better generation
     prompt += ', detailed face, clear eyes, professional portrait, high quality, character design, single person, centered composition';
-    
+
     return prompt;
   };
 
@@ -215,7 +215,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
     if (generationMode === 'image' && !uploadedImage) return;
     setPrompt('');
     setIsGenerating(true);
-    
+
     try {
       const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const token = safeLocalStorage.getItem('token');
@@ -389,7 +389,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
     } catch (error) {
       console.error('Error generating avatar:', error);
-      try { (window.__toast?.push || (()=>{}))({ message: `Error generating avatar: ${error.message}`, type: 'error' }); } catch(_) {}
+      try { (window.__toast?.push || (() => { }))({ message: `Error generating avatar: ${error.message}`, type: 'error' }); } catch (_) { }
     } finally {
       setIsGenerating(false);
     }
@@ -418,22 +418,24 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
   return (
     <div className="h-full flex flex-col">
-      {/* Generation Mode Switch (header removed) */}
-      <div className="p-3 bg-white/5 border-b border-white/10 flex justify-center">
-        <div className="flex items-center gap-2 p-1 rounded-lg bg-gray-800">
+      {/* Generation Mode Switch */}
+      <div className="p-4 border-b border-white/5 flex justify-center">
+        <div className="p-1 rounded-xl bg-black/40 border border-white/5 flex items-center gap-1">
           <button
             onClick={() => setGenerationMode('text')}
-            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-              generationMode === 'text' ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' : 'text-gray-300 hover:bg-white/10'
-            }`}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${generationMode === 'text'
+              ? 'bg-white text-black shadow-lg'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
           >
             Text to Avatar
           </button>
           <button
             onClick={() => setGenerationMode('image')}
-            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-              generationMode === 'image' ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' : 'text-gray-300 hover:bg-white/10'
-            }`}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${generationMode === 'image'
+              ? 'bg-white text-black shadow-lg'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
           >
             Image to Avatar
           </button>
@@ -446,16 +448,16 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
-          className="border-b border-white/10 bg-white/5"
+          className="border-b border-white/5 bg-black/20"
         >
           <div className="p-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Gender</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Gender</label>
                 <select
                   value={settings.gender}
                   onChange={(e) => setSettings(prev => ({ ...prev, gender: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="any">Any</option>
                   <option value="male">Male</option>
@@ -463,11 +465,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Age</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Age</label>
                 <select
                   value={settings.age}
                   onChange={(e) => setSettings(prev => ({ ...prev, age: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="child">Child</option>
                   <option value="teen">Teen</option>
@@ -476,11 +478,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Style</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Style</label>
                 <select
                   value={settings.style}
                   onChange={(e) => setSettings(prev => ({ ...prev, style: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="realistic">Realistic</option>
                   <option value="cartoon">Cartoon</option>
@@ -489,11 +491,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Expression</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Expression</label>
                 <select
                   value={settings.expression}
                   onChange={(e) => setSettings(prev => ({ ...prev, expression: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="neutral">Neutral</option>
                   <option value="happy">Happy</option>
@@ -502,11 +504,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Clothing</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Clothing</label>
                 <select
                   value={settings.clothing}
                   onChange={(e) => setSettings(prev => ({ ...prev, clothing: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="casual">Casual</option>
                   <option value="formal">Formal</option>
@@ -515,11 +517,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Background</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Background</label>
                 <select
                   value={settings.background}
                   onChange={(e) => setSettings(prev => ({ ...prev, background: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="transparent">Transparent</option>
                   <option value="solid">Solid Color</option>
@@ -528,11 +530,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Hair Style</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Hair Style</label>
                 <select
                   value={settings.hairStyle}
                   onChange={(e) => setSettings(prev => ({ ...prev, hairStyle: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="any">Any</option>
                   <option value="short">Short</option>
@@ -544,11 +546,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Build</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Build</label>
                 <select
                   value={settings.build}
                   onChange={(e) => setSettings(prev => ({ ...prev, build: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="slim">Slim</option>
                   <option value="athletic">Athletic</option>
@@ -558,11 +560,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Ethnicity</label>
+                <label className="text-xs font-medium text-gray-400 mb-2 block uppercase tracking-wider">Ethnicity</label>
                 <select
                   value={settings.ethnicity}
                   onChange={(e) => setSettings(prev => ({ ...prev, ethnicity: e.target.value }))}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option value="any">Any</option>
                   <option value="caucasian">Caucasian</option>
@@ -576,8 +578,8 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
             </div>
 
             {/* Character Presets */}
-            <div className="border-t border-gray-700/50 pt-4 mb-4">
-              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+            <div className="border-t border-white/5 pt-4 mb-4">
+              <h4 className="text-xs font-medium text-gray-400 mb-3 flex items-center gap-2 uppercase tracking-wider">
                 <User className="w-4 h-4" />
                 Character Presets
               </h4>
@@ -586,7 +588,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                   <button
                     key={index}
                     onClick={() => applyPreset(preset)}
-                    className="p-2 text-xs bg-gray-800/50 hover:bg-red-600/20 border border-gray-700/50 hover:border-red-600/50 rounded-lg text-gray-300 hover:text-white transition-colors"
+                    className="p-2 text-xs bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-gray-300 hover:text-white transition-colors"
                   >
                     {preset.name}
                   </button>
@@ -595,12 +597,12 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
             </div>
 
             {/* Prompt Preview */}
-            <div className="border-t border-gray-700/50 pt-4 mb-4">
-              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+            <div className="border-t border-white/5 pt-4 mb-4">
+              <h4 className="text-xs font-medium text-gray-400 mb-3 flex items-center gap-2 uppercase tracking-wider">
                 <Sparkles className="w-4 h-4" />
                 Generated Prompt Preview
               </h4>
-              <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+              <div className="p-3 bg-black/40 rounded-lg border border-white/10">
                 <p className="text-sm text-gray-300 font-mono break-words">
                   {prompt ? buildCharacterPrompt(prompt, settings, customization) : 'Enter a prompt to see the generated character prompt...'}
                 </p>
@@ -608,46 +610,46 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
             </div>
 
             {/* Customization Colors */}
-            <div className="border-t border-gray-700/50 pt-4">
-              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+            <div className="border-t border-white/5 pt-4">
+              <h4 className="text-xs font-medium text-gray-400 mb-3 flex items-center gap-2 uppercase tracking-wider">
                 <Palette className="w-4 h-4" />
                 Customization
               </h4>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Hair Color</label>
+                  <label className="text-xs text-gray-500 mb-1 block">Hair Color</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={customization.hairColor}
                       onChange={(e) => handleCustomizationChange('hairColor', e.target.value)}
-                      className="w-8 h-8 rounded border border-gray-600"
+                      className="w-8 h-8 rounded border border-white/10 bg-transparent cursor-pointer"
                     />
-                    <span className="text-xs text-gray-400">{customization.hairColor}</span>
+                    <span className="text-xs text-gray-400 opacity-60">{customization.hairColor}</span>
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Eye Color</label>
+                  <label className="text-xs text-gray-500 mb-1 block">Eye Color</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={customization.eyeColor}
                       onChange={(e) => handleCustomizationChange('eyeColor', e.target.value)}
-                      className="w-8 h-8 rounded border border-gray-600"
+                      className="w-8 h-8 rounded border border-white/10 bg-transparent cursor-pointer"
                     />
-                    <span className="text-xs text-gray-400">{customization.eyeColor}</span>
+                    <span className="text-xs text-gray-400 opacity-60">{customization.eyeColor}</span>
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Skin Tone</label>
+                  <label className="text-xs text-gray-500 mb-1 block">Skin Tone</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={customization.skinTone}
                       onChange={(e) => handleCustomizationChange('skinTone', e.target.value)}
-                      className="w-8 h-8 rounded border border-gray-600"
+                      className="w-8 h-8 rounded border border-white/10 bg-transparent cursor-pointer"
                     />
-                    <span className="text-xs text-gray-400">{customization.skinTone}</span>
+                    <span className="text-xs text-gray-400 opacity-60">{customization.skinTone}</span>
                   </div>
                 </div>
               </div>
@@ -657,20 +659,19 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
       )}
 
       {/* Inline compact settings bar (GPT-like) */}
-      <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+      <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
         <div className="flex flex-wrap items-center gap-3">
           {/* Gender quick chips */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Gender</span>
+            <span className="text-xs font-medium text-gray-500">Gender</span>
             {['female', 'male', 'any'].map((gender) => (
               <button
                 key={gender}
                 onClick={() => setSettings(prev => ({ ...prev, gender }))}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
-                  settings.gender === gender
-                    ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
-                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                }`}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${settings.gender === gender
+                  ? 'bg-white text-black shadow-sm'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                  }`}
               >
                 {gender.charAt(0).toUpperCase() + gender.slice(1)}
               </button>
@@ -679,11 +680,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
           {/* Style */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Style</span>
+            <span className="text-xs font-medium text-gray-500">Style</span>
             <select
               value={settings.style}
               onChange={(e) => setSettings(prev => ({ ...prev, style: e.target.value }))}
-              className="px-2 py-1 rounded text-xs bg-black/30 border border-white/10 text-white"
+              className="px-2 py-1 rounded-lg text-xs bg-black/20 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer hover:bg-black/30"
             >
               <option value="realistic">Realistic</option>
               <option value="cartoon">Cartoon</option>
@@ -694,11 +695,11 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
           {/* Age */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Age</span>
+            <span className="text-xs font-medium text-gray-500">Age</span>
             <select
               value={settings.age}
               onChange={(e) => setSettings(prev => ({ ...prev, age: e.target.value }))}
-              className="px-2 py-1 rounded text-xs bg-black/30 border border-white/10 text-white"
+              className="px-2 py-1 rounded-lg text-xs bg-black/20 border border-white/10 text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer hover:bg-black/30"
             >
               <option value="child">Child</option>
               <option value="teen">Teen</option>
@@ -707,25 +708,10 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
             </select>
           </div>
 
-          {/* Expression */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Expression</span>
-            <select
-              value={settings.expression}
-              onChange={(e) => setSettings(prev => ({ ...prev, expression: e.target.value }))}
-              className="px-2 py-1 rounded text-xs bg-black/30 border border-white/10 text-white"
-            >
-              <option value="neutral">Neutral</option>
-              <option value="happy">Happy</option>
-              <option value="serious">Serious</option>
-              <option value="confident">Confident</option>
-            </select>
-          </div>
-
           {/* More settings toggle */}
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="ml-auto px-3 py-1 rounded text-xs bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10"
+            className="ml-auto px-3 py-1 rounded-lg text-xs bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
             title={showSettings ? 'Hide settings' : 'More settings'}
           >
             {showSettings ? 'Hide' : 'More'}
@@ -735,26 +721,26 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
       {/* Avatar Collection */}
       {avatarCollection.length > 0 && (
-        <div className="border-b border-white/10 bg-white/5 p-4">
-          <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-            <User className="w-5 h-5" />
-            Your Avatar Collection ({avatarCollection.length})
+        <div className="border-b border-white/5 bg-white/[0.02] p-4">
+          <h3 className="text-xs font-medium text-gray-400 mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <User className="w-4 h-4" />
+            Your Collection ({avatarCollection.length})
           </h3>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {avatarCollection.map((avatar, index) => (
-              <div key={avatar._id} className="flex-shrink-0 relative group">
+              <div key={avatar._id} className="flex-shrink-0 relative group w-16 h-16">
                 <img
                   src={avatar.avatarUrl || `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/avatars/public/${avatar._id}`}
                   alt={avatar.prompt}
-                  className="w-20 h-20 rounded-lg object-cover border border-white/10 hover:border-red-500/50 transition-colors"
+                  className="w-full h-full rounded-xl object-cover border border-white/10 group-hover:border-white/30 transition-colors"
                 />
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
                   <button
                     onClick={() => setPrompt(avatar.prompt)}
-                    className="p-2 bg-white/20 hover:bg-white/30 rounded-lg text-white transition-colors"
+                    className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white transition-colors"
                     title="Use this prompt"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-3 h-3" />
                   </button>
                 </div>
               </div>
@@ -764,20 +750,19 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-h-0">
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Messages */}
-          <div className="flex-1 p-6 overflow-y-auto">
+          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
             {messages?.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {messages.map((message, index) => (
                   <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-2xl p-4 rounded-2xl ${
-                      message.type === 'user' 
-                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' 
-                        : 'bg-gray-800/50 text-gray-200'
-                    }`}>
+                    <div className={`max-w-2xl p-4 rounded-2xl ${message.type === 'user'
+                      ? 'bg-blue-600/20 border border-blue-500/30 text-white'
+                      : 'bg-white/5 border border-white/10 text-gray-200'
+                      }`}>
                       {message.type === 'user' ? (
                         <p>{message.content}</p>
                       ) : (
@@ -785,22 +770,22 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                       )}
                       {message.avatar && (
                         <div className="mt-3">
-                          <div className="relative group">
-                          <img 
-                            src={message.avatar} 
-                            alt="Generated Avatar" 
-                            className="rounded-lg max-w-full h-auto"
+                          <div className="relative group rounded-xl overflow-hidden bg-black/50">
+                            <img
+                              src={message.avatar}
+                              alt="Generated Avatar"
+                              className="max-w-full h-auto"
                               onLoad={() => console.log('✅ Avatar loaded successfully:', message.avatar)}
                               onError={(e) => {
                                 console.error('❌ Avatar failed to load:', message.avatar);
-                                
+
                                 // Ensure we have a full URL
-                                const fullImageUrl = message.avatar.startsWith('http') 
-                                  ? message.avatar 
+                                const fullImageUrl = message.avatar.startsWith('http')
+                                  ? message.avatar
                                   : `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}${message.avatar}`;
-                                
+
                                 console.log('🔧 Constructed full URL:', fullImageUrl);
-                                
+
                                 // Try to load as blob URL to bypass CORS
                                 fetch(fullImageUrl)
                                   .then(response => {
@@ -816,7 +801,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                       size: blob.size,
                                       type: blob.type
                                     });
-                                    
+
                                     // Create object URL and set as src
                                     const objectUrl = URL.createObjectURL(blob);
                                     console.log('🔗 Created object URL:', objectUrl);
@@ -834,9 +819,9 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                     try {
                                       const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
                                       const token = safeLocalStorage.getItem('token');
-                                      
+
                                       if (!token) {
-                                        try { (window.__toast?.push || (()=>{}))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch(_) {}
+                                        try { (window.__toast?.push || (() => { }))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch (_) { }
                                         return;
                                       }
 
@@ -863,13 +848,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                         if (onAddToCollection) {
                                           onAddToCollection(imageData, true);
                                         }
-                                        try { (window.__toast?.push || (()=>{}))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch(_) {}
+                                        try { (window.__toast?.push || (() => { }))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch (_) { }
                                       } else {
-                                        try { (window.__toast?.push || (()=>{}))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch(_) {}
+                                        try { (window.__toast?.push || (() => { }))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch (_) { }
                                       }
                                     } catch (error) {
                                       console.error('Error saving avatar:', error);
-                                      try { (window.__toast?.push || (()=>{}))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch(_) {}
+                                      try { (window.__toast?.push || (() => { }))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch (_) { }
                                     }
                                   }}
                                   className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-white transition-colors"
@@ -880,7 +865,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                               </div>
                             )}
                           </div>
-                          
+
                           {/* Save to Avatars Button - Prominent button below image */}
                           {message.imageId && (
                             <div className="mt-3 flex justify-center">
@@ -888,12 +873,12 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                 onClick={async () => {
                                   try {
                                     console.log('🔍 Saving avatar with imageId:', message.imageId);
-                                    
+
                                     const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
                                     const token = safeLocalStorage.getItem('token');
-                                    
+
                                     if (!token) {
-                                      try { (window.__toast?.push || (()=>{}))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch(_) {}
+                                      try { (window.__toast?.push || (() => { }))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch (_) { }
                                       return;
                                     }
 
@@ -920,13 +905,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                                       if (onAddToCollection) {
                                         onAddToCollection(imageData, true);
                                       }
-                                      try { (window.__toast?.push || (()=>{}))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch(_) {}
+                                      try { (window.__toast?.push || (() => { }))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch (_) { }
                                     } else {
-                                      try { (window.__toast?.push || (()=>{}))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch(_) {}
+                                      try { (window.__toast?.push || (() => { }))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch (_) { }
                                     }
                                   } catch (error) {
                                     console.error('Error saving avatar:', error);
-                                    try { (window.__toast?.push || (()=>{}))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch(_) {}
+                                    try { (window.__toast?.push || (() => { }))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch (_) { }
                                   }
                                 }}
                                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
@@ -959,7 +944,7 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
 
           {/* Input Area */}
           <div className="p-6 border-t border-gray-800/50">
-            
+
             {generationMode === 'text' ? (
               <div className="flex gap-3">
                 <div className="flex-1 relative">
@@ -978,13 +963,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                       }
                     }}
                     placeholder="Describe the avatar you want to create..."
-                    className="w-full p-4 pr-12 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 resize-none max-h-40"
+                    className="w-full p-4 pr-12 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-[var(--primary)]/50 focus:ring-2 focus:ring-[var(--primary)]/20 resize-none max-h-40"
                     rows="3"
                   />
                   <button
                     onClick={handleGenerate}
                     disabled={!prompt.trim() || isGenerating}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-[var(--primary)] text-black hover:bg-[var(--primary)]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {isGenerating ? (
                       <RefreshCw className="w-5 h-5 animate-spin" />
@@ -1000,12 +985,12 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                   type="file"
                   accept="image/*"
                   onChange={(e) => setUploadedImage(e.target.files[0])}
-                  className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-500 file:text-white hover:file:bg-red-600"
+                  className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[var(--primary)] file:text-black hover:file:bg-[var(--primary)]/90"
                 />
                 <button
                   onClick={handleGenerate}
                   disabled={!uploadedImage || isGenerating}
-                  className="w-full max-w-xs p-3 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  className="w-full max-w-xs p-3 rounded-lg bg-[var(--primary)] text-black hover:bg-[var(--primary)]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                 >
                   {isGenerating ? (
                     <RefreshCw className="w-5 h-5 animate-spin" />
@@ -1030,9 +1015,9 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-white mb-2">Generated Avatar</h3>
               <div className="relative">
-                <img 
-                  src={generatedAvatar} 
-                  alt="Generated Avatar" 
+                <img
+                  src={generatedAvatar}
+                  alt="Generated Avatar"
                   className="w-full rounded-lg shadow-lg"
                   onLoad={() => console.log('✅ Preview avatar loaded successfully:', generatedAvatar)}
                   onError={(e) => {
@@ -1056,23 +1041,23 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                   try {
                     console.log('🔍 Looking for message with avatar:', generatedAvatar);
                     console.log('🔍 Current chat messages:', currentChat?.messages);
-                    
+
                     // Find the current message with the imageId
                     const currentMessage = currentChat?.messages?.find(msg => msg.avatar === generatedAvatar);
                     console.log('🔍 Found message:', currentMessage);
                     console.log('🔍 Message imageId:', currentMessage?.imageId);
-                    
+
                     if (!currentMessage?.imageId) {
                       console.error('❌ No imageId found in message:', currentMessage);
-                      try { (window.__toast?.push || (()=>{}))({ message: 'No image ID found. Please generate a new avatar.', type: 'warning' }); } catch(_) {}
+                      try { (window.__toast?.push || (() => { }))({ message: 'No image ID found. Please generate a new avatar.', type: 'warning' }); } catch (_) { }
                       return;
                     }
 
                     const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
                     const token = safeLocalStorage.getItem('token');
-                    
+
                     if (!token) {
-                      try { (window.__toast?.push || (()=>{}))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch(_) {}
+                      try { (window.__toast?.push || (() => { }))({ message: 'Please log in to save avatars.', type: 'warning' }); } catch (_) { }
                       return;
                     }
 
@@ -1099,13 +1084,13 @@ const AvatarCreator = ({ currentChat, onChatUpdate, onNewChat, avatarCollection 
                       if (onAddToCollection) {
                         onAddToCollection(imageData, true);
                       }
-                      try { (window.__toast?.push || (()=>{}))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch(_) {}
+                      try { (window.__toast?.push || (() => { }))({ message: 'Avatar saved to your collection!', type: 'success' }); } catch (_) { }
                     } else {
-                      try { (window.__toast?.push || (()=>{}))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch(_) {}
+                      try { (window.__toast?.push || (() => { }))({ message: result.message || 'Failed to save avatar', type: 'error' }); } catch (_) { }
                     }
                   } catch (error) {
                     console.error('Error saving avatar:', error);
-                    try { (window.__toast?.push || (()=>{}))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch(_) {}
+                    try { (window.__toast?.push || (() => { }))({ message: 'Failed to save avatar. Please try again.', type: 'error' }); } catch (_) { }
                   }
                 }}
                 className="w-full p-3 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all flex items-center justify-center gap-2"

@@ -23,7 +23,7 @@ const ImageGallery = () => {
 
       const token = safeLocalStorage.getItem('token');
       console.log('🔑 Token exists:', !!token);
-      
+
       if (!token) {
         console.log('❌ No token found, user not logged in');
         setError('Please log in to view images');
@@ -57,7 +57,7 @@ const ImageGallery = () => {
         dataLength: data.data?.length || 0,
         pagination: data.pagination
       });
-      
+
       if (data.success && data.data) {
         console.log('✅ Images loaded successfully:', data.data.length);
         console.log('🖼️ Sample image:', data.data[0]);
@@ -90,12 +90,12 @@ const ImageGallery = () => {
       });
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
-        try { (window.__toast?.push || (()=>{}))({ message: `Delete failed: ${res.status}${txt ? ` - ${txt}` : ''}`, type: 'error' }); } catch(_) {}
+        try { (window.__toast?.push || (() => { }))({ message: `Delete failed: ${res.status}${txt ? ` - ${txt}` : ''}`, type: 'error' }); } catch (_) { }
         return;
       }
       setImages(prev => prev.filter(img => img._id !== id));
       if (selectedImage?._id === id) setSelectedImage(null);
-      try { (window.__toast?.push || (()=>{}))({ message: 'Image deleted', type: 'success' }); } catch(_) {}
+      try { (window.__toast?.push || (() => { }))({ message: 'Image deleted', type: 'success' }); } catch (_) { }
     } catch (e) {
       console.error('Delete error:', e);
     }
@@ -132,11 +132,11 @@ const ImageGallery = () => {
   if (error) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center text-red-400">
+        <div className="text-center text-[var(--primary)]">
           <p className="text-sm">{error}</p>
           <button
             onClick={fetchImages}
-            className="mt-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded"
+            className="mt-2 px-3 py-1 bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-black text-xs rounded"
           >
             Retry
           </button>
@@ -214,7 +214,7 @@ const ImageGallery = () => {
                       prompt: image.prompt,
                       error: e
                     });
-                    
+
                     // Test the URL directly and try to load as blob
                     fetch(getImageUrl(image._id))
                       .then(response => {
@@ -231,7 +231,7 @@ const ImageGallery = () => {
                           size: blob.size,
                           type: blob.type
                         });
-                        
+
                         // Try to create object URL and set as src
                         const objectUrl = URL.createObjectURL(blob);
                         console.log('🔗 Created object URL:', objectUrl);
@@ -247,7 +247,7 @@ const ImageGallery = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-between p-4">
                   {/* Action buttons */}
                   <div className="flex justify-end gap-2">
-                    <button 
+                    <button
                       className="w-8 h-8 bg-black/50 hover:bg-purple-600/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
                       title="Download"
                       onClick={(e) => {
@@ -259,12 +259,12 @@ const ImageGallery = () => {
                       }}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7,10 12,15 17,10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7,10 12,15 17,10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
                       </svg>
                     </button>
-                    <button 
+                    <button
                       className="w-8 h-8 bg-black/50 hover:bg-purple-600/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
                       title="Copy URL"
                       onClick={(e) => {
@@ -273,19 +273,19 @@ const ImageGallery = () => {
                       }}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                       </svg>
                     </button>
-                    <button 
-                      className="w-8 h-8 bg-black/50 hover:bg-red-600/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                    <button
+                      className="w-8 h-8 bg-black/50 hover:bg-[var(--primary)]/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 text-white hover:text-black"
                       title="Delete"
                       onClick={(e) => { e.stopPropagation(); deleteImage(image._id); }}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  
+
                   {/* Image info */}
                   <div className="text-white">
                     <p className="text-sm font-medium truncate mb-1" title={image.prompt}>

@@ -9,7 +9,8 @@ import {
   ChevronRight,
   Eye,
 } from "lucide-react";
-import safeLocalStorage from "../../../utils/localStorage";
+import { useToast } from '../../ToastProvider';
+import safeLocalStorage from '../../../utils/localStorage';
 
 const Gallery = () => {
   const [images, setImages] = useState([]);
@@ -22,9 +23,9 @@ const Gallery = () => {
 
   useEffect(() => {
     fetchImages();
-  }, []);
+  }, [fetchImages]);
 
-  const fetchImages = async () => {
+  const fetchImages = React.useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -55,7 +56,7 @@ const Gallery = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiBase]);
 
   const getImageUrl = (imageId) => {
     return `${apiBase}/api/images/public/${imageId}`;
@@ -193,17 +194,17 @@ const Gallery = () => {
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0b0b0f]">
+    <div className="h-full flex flex-col bg-noir-900 border-l border-white/5">
       {/* Header */}
-      <div className="bg-gradient-to-r from-black/20 via-gray-900/30 to-blue-900/20 backdrop-blur-xl border-b border-black/20 p-6">
+      <div className="bg-white/[0.02] backdrop-blur-xl border-b border-white/5 p-6">
         <div className="flex items-center justify-between">
           {/* Left Section - Title and Count */}
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
               <div>
-                <h1 className="text-3xl font-bold text-white">Explore</h1>
-                <p className="text-gray-400 text-sm font-medium">
-                  {sortedImages.length} images
+                <h1 className="text-2xl font-bold text-white tracking-tight">Explore</h1>
+                <p className="text-gray-400 text-sm font-medium mt-1">
+                  {sortedImages.length} images from the community
                 </p>
               </div>
             </div>
@@ -213,13 +214,13 @@ const Gallery = () => {
           <div className="flex items-center gap-4">
             {/* Search */}
             <div className="relative group">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-red-400 transition-colors" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4 group-focus-within:text-white transition-colors" />
               <input
                 type="text"
                 placeholder="Search images..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-12 pr-4 w-12 h-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 focus:bg-white/10 transition-all duration-200 backdrop-blur-sm"
+                className="pl-11 pr-4 py-2.5 w-64 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/20 focus:bg-black/40 transition-all duration-200"
               />
             </div>
           </div>
@@ -300,7 +301,7 @@ const Gallery = () => {
                               e.stopPropagation();
                               handleDownload(image);
                             }}
-                            className="w-8 h-8 bg-black/50 hover:bg-red-600/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                            className="w-8 h-8 bg-black/50 hover:bg-[var(--primary)]/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
                             title="Download"
                           >
                             <Download className="w-4 h-4" />
@@ -310,7 +311,7 @@ const Gallery = () => {
                               e.stopPropagation();
                               handleShare(image);
                             }}
-                            className="w-8 h-8 bg-black/50 hover:bg-red-600/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                            className="w-8 h-8 bg-black/50 hover:bg-[var(--primary)]/80 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
                             title="Share"
                           >
                             <Share2 className="w-4 h-4" />
@@ -367,14 +368,14 @@ const Gallery = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleDownload(selectedImage)}
-                    className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg text-white transition-colors"
+                    className="p-2 bg-white/10 hover:bg-[var(--primary)]/20 rounded-lg text-white transition-colors"
                     title="Download"
                   >
                     <Download className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleShare(selectedImage)}
-                    className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg text-white transition-colors"
+                    className="p-2 bg-white/10 hover:bg-[var(--primary)]/20 rounded-lg text-white transition-colors"
                     title="Share"
                   >
                     <Share2 className="w-4 h-4" />
@@ -382,7 +383,7 @@ const Gallery = () => {
                   {/* No delete in Explore modal */}
                   <button
                     onClick={() => setSelectedImage(null)}
-                    className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg text-white transition-colors"
+                    className="p-2 bg-white/10 hover:bg-[var(--primary)]/20 rounded-lg text-white transition-colors"
                     title="Close"
                   >
                     <X className="w-4 h-4" />

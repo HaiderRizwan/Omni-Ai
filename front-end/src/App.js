@@ -13,18 +13,23 @@ import Dashboard from './components/Dashboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import safeLocalStorage from './utils/localStorage';
 import OAuthSuccess from './components/OAuthSuccess';
+import Pricing from './components/Pricing';
+import Features from './components/Features';
+import Support from './components/Support';
 
 function App() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const { push } = useToast();
+  // State for landing page navigation (home, features, pricing, support)
+  const [currentView, setCurrentView] = useState('home');
 
   useEffect(() => {
-    try { window.__toast = { push }; } catch (_) {}
+    try { window.__toast = { push }; } catch (_) { }
     // Check if user is logged in
     const storedUser = safeLocalStorage.getItem('user');
     const token = safeLocalStorage.getItem('token');
-    
+
     if (storedUser && token) {
       try {
         setUser(JSON.parse(storedUser));
@@ -48,6 +53,8 @@ function App() {
     setUser(null);
   };
 
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
@@ -68,21 +75,33 @@ function App() {
     );
   }
 
-  // If user is not logged in, show main site
+  // If user is not logged in, show main landing site with navigation
   return (
     <ThemeProvider>
       <div className="App">
         <Toaster position="top-right" />
-        <Navbar />
-        <Hero />
-        <PromptBar />
-        <Gallery />
-        <DocumentConverter />
-        <CurrencyConverter />
-        <Footer />
+        <Navbar currentView={currentView} onNavigate={setCurrentView} />
+
+        {currentView === 'home' && (
+          <>
+            <Hero />
+            <PromptBar />
+            <Gallery />
+            <DocumentConverter />
+            <CurrencyConverter />
+          </>
+        )}
+
+        {currentView === 'features' && <Features />}
+        {currentView === 'pricing' && <Pricing />}
+        {currentView === 'support' && <Support />}
+
+        <Footer onNavigate={setCurrentView} />
       </div>
     </ThemeProvider>
   );
 }
+
+
 
 export default App;

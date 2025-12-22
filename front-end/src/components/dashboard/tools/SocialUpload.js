@@ -1,29 +1,40 @@
 import React, { useState, useEffect } from "react";
 import safeLocalStorage from "../../../utils/localStorage";
 import GallerySelectionModal from "./GallerySelectionModal";
+import { useToast } from "../../ToastProvider";
+import { Upload, X, Youtube, Image, FileText, Globe, Share2, Twitter } from "lucide-react";
 
 function SocialUpload() {
+  const [activeTab, setActiveTab] = useState("youtube"); // 'youtube' | 'x'
+
+  // YouTube State
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [result, setResult] = useState(null);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [selectedFileUrl, setSelectedFileUrl] = useState(null);
+  const [tags, setTags] = useState("");
+  const [privacyStatus, setPrivacyStatus] = useState("public");
+
+  // X State
   const [tweetText, setTweetText] = useState("");
   const [isTweeting, setIsTweeting] = useState(false);
   const [isConnectingX, setIsConnectingX] = useState(false);
-  const [showGalleryModal, setShowGalleryModal] = useState(false);
-  const [selectedFileUrl, setSelectedFileUrl] = useState(null);
+
+  const { push } = useToast();
 
   const onFileChange = (e) => {
     const f = e.target.files && e.target.files[0];
     setFile(f || null);
-    setSelectedFileUrl(null); // Clear gallery selection
+    setSelectedFileUrl(null);
   };
 
   const onFileSelectFromGallery = (fileUrl, fileTitle) => {
     setSelectedFileUrl(fileUrl);
     setTitle(fileTitle || "");
-    setFile(null); // Clear local file selection
+    setFile(null);
     setShowGalleryModal(false);
   };
 
@@ -42,41 +53,29 @@ function SocialUpload() {
       } else if (selectedFileUrl) {
         const response = await fetch(selectedFileUrl);
         const blob = await response.blob();
-        const fileName = selectedFileUrl.substring(
-          selectedFileUrl.lastIndexOf("/") + 1,
-        );
+        const fileName = selectedFileUrl.substring(selectedFileUrl.lastIndexOf("/") + 1);
         const galleryFile = new File([blob], fileName, { type: blob.type });
         form.append("file", galleryFile);
         form.append("title", title || fileName);
       }
 
       form.append("description", description || "");
+      form.append("tags", tags || "");
+      form.append("privacyStatus", privacyStatus || "public");
 
       const res = await fetch(`${apiBase}/api/socials/youtube/upload`, {
         method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: form,
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success)
-        throw new Error(json.message || `Upload failed (${res.status})`);
+      if (!res.ok || !json.success) throw new Error(json.message || `Upload failed (${res.status})`);
+
       setResult(json.data);
-      try {
-        (window.__toast?.push || (() => {}))({
-          message: "Uploaded to YouTube successfully",
-          type: "success",
-        });
-      } catch (_) {}
+      push({ message: "Uploaded to YouTube successfully", type: "success" });
     } catch (e) {
       console.error("YouTube upload error", e);
-      try {
-        (window.__toast?.push || (() => {}))({
-          message: e?.message || "Upload failed",
-          type: "error",
-        });
-      } catch (_) {}
+      push({ message: e?.message || "Upload failed", type: "error" });
     } finally {
       setIsUploading(false);
     }
@@ -91,23 +90,17 @@ function SocialUpload() {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success || !json.url)
-        throw new Error(json.message || "Failed to init X OAuth");
+      if (!res.ok || !json.success || !json.url) throw new Error(json.message || "Failed to init X OAuth");
       window.location.href = json.url;
     } catch (e) {
-      console.error("Connect X error", e);
-      try {
-        (window.__toast?.push || (() => {}))({
-          message: e?.message || "Connect failed",
-          type: "error",
-        });
-      } catch (_) {}
+      push({ message: e?.message || "Connect failed", type: "error" });
     } finally {
       setIsConnectingX(false);
     }
   };
 
   const postToX = async () => {
+    // (Implementation same as before, abbreviated for brevity in prompt context but fully implemented in code)
     if (!tweetText.trim()) return;
     try {
       setIsTweeting(true);
@@ -122,135 +115,240 @@ function SocialUpload() {
         body: JSON.stringify({ text: tweetText }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success)
-        throw new Error(json.message || `Tweet failed (${res.status})`);
-      try {
-        (window.__toast?.push || (() => {}))({
-          message: "Tweet posted",
-          type: "success",
-        });
-      } catch (_) {}
+      if (!res.ok || !json.success) throw new Error(json.message || `Tweet failed`);
+      push({ message: "Tweet posted", type: "success" });
       setTweetText("");
     } catch (e) {
-      console.error("Tweet error", e);
-      try {
-        (window.__toast?.push || (() => {}))({
-          message: e?.message || "Tweet failed",
-          type: "error",
-        });
-      } catch (_) {}
+      push({ message: e?.message || "Tweet failed", type: "error" });
     } finally {
       setIsTweeting(false);
     }
   };
 
-  return (
-    <div className="p-4 md:p-6 bg-gray-900 text-white min-h-screen">
-      <h1 className="text-3xl font-bold mb-6 text-neon-blue">
-        Social Media Uploader
-      </h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* YouTube Uploader */}
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-semibold mb-4 text-red-500">
-            Upload to YouTube
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Select File
-              </label>
-              <div className="flex gap-4">
-                <input
-                  type="file"
-                  accept="video/*,image/*"
-                  onChange={onFileChange}
-                  className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-neon-pink file:text-white hover:file:bg-opacity-80"
-                />
-                <button
-                  onClick={() => setShowGalleryModal(true)}
-                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700"
-                >
-                  From Gallery
-                </button>
+  return (
+    <div className="h-full flex flex-col bg-black text-white p-6 overflow-hidden">
+
+      {/* Header & Tabs */}
+      <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-6">
+          <h1 className="text-2xl font-bold tracking-tight">Social Studio</h1>
+          <div className="flex bg-white/5 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('youtube')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'youtube' ? 'bg-[var(--primary)] text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+            >
+              <div className="flex items-center gap-2">
+                <Youtube size={16} /> YouTube
               </div>
-              {(file || selectedFileUrl) && (
-                <div className="mt-2 text-sm text-gray-400">
-                  Selected: {file ? file.name : selectedFileUrl}
+            </button>
+            <button
+              onClick={() => setActiveTab('x')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'x' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+            >
+              <div className="flex items-center gap-2">
+                <Twitter size={16} /> X / Twitter
+              </div>
+            </button>
+          </div>
+        </div>
+
+
+      </div>
+
+      {/* Main Content Area - Horizontal Layout for YouTube */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+
+        {activeTab === 'youtube' && (
+          <div className="h-full flex flex-col lg:flex-row gap-6">
+
+            {/* Left Column: Media Preview (40%) */}
+            <div className="w-full lg:w-[40%] flex flex-col gap-4">
+              <div className="flex-1 bg-neutral-900 border-2 border-dashed border-white/10 rounded-2xl relative group hover:border-white/20 transition-all overflow-hidden flex flex-col items-center justify-center p-8">
+
+                {file || selectedFileUrl ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center">
+                    <div className="w-20 h-20 rounded-full bg-[var(--primary)]/20 flex items-center justify-center mb-4">
+                      <FileText className="w-8 h-8 text-[var(--primary)]" />
+                    </div>
+                    <p className="text-lg font-medium text-white max-w-[80%] text-center truncate mb-2">
+                      {file ? file.name : 'Selected from Gallery'}
+                    </p>
+                    <p className="text-sm text-gray-500 mb-6">Ready to upload</p>
+                    <button
+                      onClick={() => { setFile(null); setSelectedFileUrl(null); }}
+                      className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-white transition-colors border border-white/10"
+                    >
+                      Change File
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <label className="absolute inset-0 cursor-pointer flex flex-col items-center justify-center">
+                      <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <Upload className="w-8 h-8 text-gray-400 group-hover:text-white" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-white mb-2">Upload Video</h3>
+                      <p className="text-gray-400 text-center max-w-xs">Drag and drop your video/short here, or click to browse</p>
+                      <input type="file" className="hidden" accept="video/*" onChange={onFileChange} />
+                    </label>
+
+                    <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+                      <div className="pointer-events-auto">
+                        <button
+                          onClick={() => setShowGalleryModal(true)}
+                          className="text-sm text-[var(--primary)] hover:underline"
+                        >
+                          or select from gallery
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Status / Result Card */}
+              {result && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <Share2 size={12} className="text-black" />
+                    </div>
+                    <span className="font-bold text-green-500">Upload Complete</span>
+                  </div>
+                  <a href={result.url} target="_blank" rel="noreferrer" className="text-sm text-white/80 hover:text-white hover:underline truncate block">
+                    {result.url}
+                  </a>
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between">
-              <button
-                onClick={uploadToYouTube}
-                disabled={(!file && !selectedFileUrl) || isUploading}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                {isUploading ? "Uploading..." : "Upload to YouTube"}
-              </button>
-            </div>
-            {result && (
-              <div className="mt-4 p-3 bg-gray-700 rounded-md text-sm text-gray-300">
-                <p className="font-semibold">Upload Successful!</p>
-                <p>
-                  Video ID: <span className="font-mono">{result.videoId}</span>
-                </p>
-                {result.url && (
-                  <p>
-                    URL:{" "}
-                    <a
-                      href={result.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-neon-blue hover:underline"
-                    >
-                      {result.url}
-                    </a>
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* X (Twitter) Integration */}
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-semibold mb-4 text-blue-400">
-            Post to X
-          </h2>
-          <div className="space-y-4">
-            <button
-              onClick={connectX}
-              disabled={isConnectingX}
-              className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400"
-            >
-              {isConnectingX ? "Connecting..." : "Connect to X"}
-            </button>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Tweet Content
-              </label>
-              <textarea
-                value={tweetText}
-                onChange={(e) => setTweetText(e.target.value)}
-                className="w-full rounded-md bg-gray-700 border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-neon-blue"
-                rows={3}
-                placeholder="What's happening on X?"
-              />
-            </div>
-            <div className="text-right">
-              <button
-                onClick={postToX}
-                disabled={!tweetText.trim() || isTweeting}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400"
-              >
-                {isTweeting ? "Posting..." : "Post to X"}
-              </button>
+            {/* Right Column: Metadata Details (60%) */}
+            <div className="w-full lg:w-[60%] bg-neutral-900 border border-white/5 rounded-2xl p-6 lg:p-8 flex flex-col">
+              <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                <FileText size={18} className="text-gray-400" /> Video Details
+              </h3>
+
+              <div className="space-y-6 flex-1">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Title</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. My Awesome AI Generation"
+                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Tell viewers about your video..."
+                    rows={5}
+                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Visibility</label>
+                    <div className="relative">
+                      <select
+                        value={privacyStatus}
+                        onChange={(e) => setPrivacyStatus(e.target.value)}
+                        className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:outline-none focus:border-[var(--primary)] cursor-pointer"
+                      >
+                        <option value="public">Public</option>
+                        <option value="unlisted">Unlisted</option>
+                        <option value="private">Private</option>
+                      </select>
+                      <Globe className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Tags</label>
+                    <input
+                      type="text"
+                      value={tags}
+                      onChange={(e) => setTags(e.target.value)}
+                      placeholder="ai, art, omni..."
+                      className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[var(--primary)] transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
+                <button
+                  onClick={uploadToYouTube}
+                  disabled={(!file && !selectedFileUrl) || isUploading}
+                  className={`
+                                  px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg
+                                  ${(!file && !selectedFileUrl) || isUploading
+                      ? 'bg-white/5 text-gray-500 cursor-not-allowed'
+                      : 'bg-[var(--primary)] text-black hover:scale-105 shadow-[var(--primary)]/20'
+                    }
+                              `}
+                >
+                  {isUploading ? (
+                    <>Checking...</>
+                  ) : (
+                    <>
+                      <Upload size={20} /> Publish Video
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {activeTab === 'x' && (
+          <div className="max-w-2xl mx-auto mt-10">
+            <div className="bg-neutral-900 border border-white/5 rounded-2xl p-8">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                  <Twitter className="fill-white" /> Post to X
+                </h2>
+                <button
+                  onClick={connectX}
+                  disabled={isConnectingX}
+                  className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full text-white transition-colors"
+                >
+                  {isConnectingX ? "Connecting..." : "Reconnect Account"}
+                </button>
+              </div>
+
+              <div className="relative mb-6">
+                <textarea
+                  value={tweetText}
+                  onChange={(e) => setTweetText(e.target.value)}
+                  placeholder="What's happening in the AI world?"
+                  className="w-full h-40 bg-black border border-white/10 rounded-xl p-4 text-white placeholder-gray-600 focus:outline-none focus:border-[var(--primary)] resize-none text-lg"
+                />
+                <div className="absolute bottom-4 right-4 text-xs text-gray-500 font-medium">
+                  {tweetText.length} / 280
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={postToX}
+                  disabled={!tweetText.trim() || isTweeting}
+                  className="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  {isTweeting ? "Posting..." : "Post"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
+
       {showGalleryModal && (
         <GallerySelectionModal
           onClose={() => setShowGalleryModal(false)}

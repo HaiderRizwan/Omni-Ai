@@ -43,25 +43,31 @@ const uploadToYouTube = async (req, res) => {
 
     const title = req.body.title || path.parse(file.originalname).name;
     const description = req.body.description || '';
+    const privacyStatus = req.body.privacyStatus || 'private';
+
+    // Parse tags (comma separated string -> array)
+    const rawTags = req.body.tags || '';
+    const tags = rawTags.split(',').map(t => t.trim()).filter(Boolean);
 
     const isImage = (file.mimetype || '').startsWith('image/');
-    const mediaCategory = isImage ? 'image' : 'video';
+    // ... (rest of check)
 
-    // For videos: upload to YouTube. For images: YouTube Shorts supports video only; require video.
+    // For videos: upload to YouTube.
     if (isImage) {
       return res.status(400).json({ success: false, message: 'YouTube uploads require video files' });
     }
 
     const stream = fs.createReadStream(file.path);
     const response = await youtube.videos.insert({
-      part: ['snippet','status'],
+      part: ['snippet', 'status'],
       requestBody: {
         snippet: {
           title,
-          description
+          description,
+          tags // [NEW] include tags
         },
         status: {
-          privacyStatus: 'private'
+          privacyStatus // [NEW] use dynamic privacy status
         }
       },
       media: {
@@ -70,7 +76,7 @@ const uploadToYouTube = async (req, res) => {
     });
 
     // Cleanup temp file
-    try { fs.unlinkSync(file.path); } catch (_) {}
+    try { fs.unlinkSync(file.path); } catch (_) { }
 
     const videoId = response?.data?.id;
     return res.status(200).json({ success: true, data: { videoId, url: videoId ? `https://youtu.be/${videoId}` : null } });

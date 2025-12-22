@@ -2,9 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap');
+
 /* Global base styles */
 body {
-  @apply bg-[#0b0b0f] text-[#e6e6f0];
+  @apply bg-noir-900 text-[#e6e6f0] font-sans antialiased overflow-x-hidden;
+  background-color: var(--surface);
 }
 
 /* Design tokens */
@@ -12,151 +16,132 @@ body {
   /* layout */
   --sidebar-w: 16rem;
 
-  /* colors */
-  --surface: #0b0b0f;
-  --surface-2: #121218;
-  --border: rgba(255,255,255,0.08);
-  --text: #e6e6f0;
-  --muted: #9aa0aa;
-  --primary: #ef4444; /* red-500 */
-  --primary-700: #b91c1c; /* red-700 */
-  --accent: #a855f7; /* purple-500 */
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  /* colors - Cyber Noir */
+  --surface: #000000;
+  --surface-2: #0A0A0A;
+  --surface-3: #141414;
+  --border: rgba(255,255,255,0.06);
+  --text: #F0F0F0;
+  --muted: #888888;
+  
+  --primary: #CCFF00; /* Hyper Lime */
+  --primary-700: #99CC00;
+  --accent: #CCFF00;
+  --accent-glow: rgba(204, 255, 0, 0.4);
+  
+  --success: #CCFF00;
+  --warning: #FFD600;
+  --danger: #FF3333;
 
   /* motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
   --dur-fast: 150ms;
-  --dur: 240ms;
-  --dur-slow: 420ms;
+  --dur: 300ms;
+  --dur-slow: 600ms;
 }
 
-/* Focus ring utility (applied via className="focus-ring") */
+/* Typography Overrides */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-heading tracking-tight;
+}
+
+/* Utility: Noise Texture */
+.bg-noise {
+  position: relative;
+}
+.bg-noise::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Focus ring utility */
 .focus-ring:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
-/* Motion presets (apply via className) */
-.anim-fade-in { animation: fade-in var(--dur) var(--ease-out) both; }
-.anim-slide-up { animation: slide-up var(--dur) var(--ease-out) both; }
-.anim-scale-in { animation: scale-in var(--dur) var(--ease-out) both; }
-
-@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
-@keyframes slide-up { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
-@keyframes scale-in { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: scale(1) } }
-
 /* UI utilities */
 .ui-card {
-  @apply bg-white/5 border border-white/10 rounded-xl;
+  @apply bg-noir-800/50 backdrop-blur-md border border-white/5 rounded-2xl transition-all duration-300;
 }
+.ui-card:hover {
+  @apply border-white/10 shadow-[0_4px_24px_-12px_rgba(0,0,0,0.5)];
+}
+
 .ui-input {
-  @apply w-full rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20;
+  @apply w-full rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all font-sans;
 }
 .ui-input-sm {
-  @apply rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20;
+  @apply rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all font-sans text-sm;
 }
+
+/* Buttons with Character */
 .ui-btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 transition;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all font-medium active:scale-95;
 }
 .ui-btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 transition;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 bg-[var(--primary)] text-black hover:bg-[var(--primary-700)] transition-all font-bold tracking-wide active:scale-95 shadow-[0_0_15px_rgba(204,255,0,0.2)];
 }
 .ui-icon-btn {
-  @apply rounded-lg p-2 text-white/70 hover:bg-white/5 hover:text-white transition;
+  @apply rounded-xl p-2 text-white/60 hover:bg-white/10 hover:text-[var(--primary)] transition-all active:scale-90;
 }
 
-/* Minimal row buttons (GPT-like) */
+/* Minimal row buttons */
 .ui-row {
-  @apply w-full flex items-center gap-3 px-3 py-2 rounded-lg text-white/80 hover:bg-white/5 transition;
+  @apply w-full flex items-center gap-3 px-3 py-2 rounded-lg text-white/70 hover:bg-white/5 hover:text-white transition-all;
 }
 .ui-row-strong {
-  @apply w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-white bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 transition;
+  @apply w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-black bg-[var(--primary)] hover:brightness-110 transition-all font-bold;
 }
 
-/* Force dark dropdown popups and readable option list */
+/* Select Styling */
 select,
 select.ui-input-sm,
 select.ui-input {
   color-scheme: dark;
-  background-color: rgba(255,255,255,0.05);
+  background-color: rgba(20, 20, 20, 1);
   color: var(--text);
+  @apply backdrop-blur-xl;
 }
 select option {
-  background-color: #0b0b0f;
-  color: #e6e6f0;
-}
-select option:checked,
-select option:hover {
-  background-color: rgba(239,68,68,0.35); /* red highlight */
-  color: #fff;
+  background-color: #0A0A0A;
+  color: #F0F0F0;
 }
 
-/* Global scrollbar styling themed to red */
+/* Custom Scrollbars (Editorial Thin) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(239,68,68,0.6) transparent; /* red-500 on transparent */
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
-
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
-
 *::-webkit-scrollbar-track {
   background: transparent;
 }
-
 *::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(239,68,68,0.65), rgba(190,18,60,0.65));
-  border-radius: 9999px;
-  border: 2px solid rgba(11,11,15,0.8);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 99px;
 }
-
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgba(239,68,68,0.9), rgba(190,18,60,0.9));
+  background: var(--primary);
 }
 
-/* Force dark dropdowns/controls and red scrollbars inside inputs/selects */
-select, textarea, input {
-  color-scheme: dark;
-}
-select::-webkit-scrollbar-thumb,
-textarea::-webkit-scrollbar-thumb,
-input::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(239,68,68,0.75), rgba(190,18,60,0.75));
-}
-select::-webkit-scrollbar-track,
-textarea::-webkit-scrollbar-track,
-input::-webkit-scrollbar-track { background: transparent; }
-
-/* Themed scrollbars (dark, subtle) */
-.themed-scrollbar {
-  scrollbar-width: thin;            /* Firefox */
-  scrollbar-color: #3b3b46 transparent;
+/* Utilities */
+.glass-panel {
+  @apply bg-noir-800/80 backdrop-blur-xl border border-white/5;
 }
 
-.themed-scrollbar::-webkit-scrollbar {
-  width: 10px;                      /* Vertical */
-  height: 10px;                     /* Horizontal */
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50;
 }
-
-.themed-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.themed-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(99,102,241,0.35), rgba(236,72,153,0.35));
-  border-radius: 9999px;
-  border: 2px solid rgba(15,15,23,0.6); /* match bg, create pill */
-}
-
-.themed-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgba(99,102,241,0.55), rgba(236,72,153,0.55));
-}
-
-.themed-scrollbar::-webkit-scrollbar-corner {
-  background: transparent;
+.text-gradient-primary {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-[var(--primary)] to-emerald-400;
 }

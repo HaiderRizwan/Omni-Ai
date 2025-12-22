@@ -4,6 +4,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { Check, ExternalLink, X } from "lucide-react";
 import PlanModal from "./PlanModal";
 import safeLocalStorage from "../../utils/localStorage";
+import { useToast } from "./../ToastProvider";
 
 const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
   const { theme, changeTheme, isDark, isRed } = useTheme();
@@ -11,6 +12,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
   const [improveModel, setImproveModel] = useState(false);
   const [activeSection, setActiveSection] = useState("general");
   const [showPlanModal, setShowPlanModal] = useState(false);
+  const { push } = useToast();
 
   useEffect(() => {
     if (user) {
@@ -36,12 +38,14 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
 
       if (!res.ok) {
         setPublishToExplore(!newValue);
-        // TODO: show toast error
+        push({ message: "Failed to update settings", type: "error" });
+      } else {
+        push({ message: "Settings updated", type: "success" });
       }
     } catch (error) {
       console.error("Failed to update settings", error);
       setPublishToExplore(!newValue);
-      // TODO: show toast error
+      push({ message: "Failed to update settings", type: "error" });
     }
   };
 
@@ -49,9 +53,8 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
     <motion.button
       onClick={onToggle}
       disabled={disabled}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-        isOn ? "bg-red-600" : "bg-gray-600"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-gray-900 ${isOn ? "bg-[var(--primary)]" : "bg-gray-600"
+        } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
       whileTap={{ scale: 0.95 }}
     >
       <motion.span
@@ -106,7 +109,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                 <SettingRow
                   label="Username"
                   value={user?.username || user?.name || "—"}
-                  icon={<Check className="w-4 h-4 text-green-500" />}
+                  icon={<Check className="w-4 h-4 text-[var(--primary)]" />}
                 />
                 <SettingRow
                   label="Language"
@@ -140,7 +143,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                   value={user?.emailVerified ? "Yes" : "No"}
                   icon={
                     user?.emailVerified ? (
-                      <Check className="w-4 h-4 text-green-500" />
+                      <Check className="w-4 h-4 text-[var(--primary)]" />
                     ) : null
                   }
                 />
@@ -180,7 +183,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
               <div className="space-y-4">
                 <SettingRow
                   label="Current theme"
-                  value={isDark ? "Dark" : "Red"}
+                  value={isDark ? "Dark" : "Primary"}
                   icon={<Check className="w-4 h-4 text-green-500" />}
                 />
                 <div
@@ -201,7 +204,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                         value="dark"
                         checked={isDark}
                         onChange={() => changeTheme("dark")}
-                        className="text-red-600"
+                        className="text-[var(--primary)]"
                       />
                       <span className="text-gray-300">
                         Dark {isDark && "(Current)"}
@@ -214,10 +217,10 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                         value="red"
                         checked={isRed}
                         onChange={() => changeTheme("red")}
-                        className="text-red-600"
+                        className="text-[var(--primary)]"
                       />
                       <span className="text-gray-300">
-                        Red {isRed && "(Current)"}
+                        Primary {isRed && "(Current)"}
                       </span>
                     </label>
                   </div>
@@ -289,7 +292,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                       </p>
                       <motion.a
                         href="#"
-                        className="inline-flex items-center gap-1 text-sm text-red-400 hover:text-red-300 underline transition-colors"
+                        className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
@@ -331,27 +334,26 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                     </p>
                   </div>
                   <span
-                    className={`px-3 py-1 text-sm font-medium rounded-full border ${
-                      isSubscribed
+                    className={`px-3 py-1 text-sm font-medium rounded-full border ${isSubscribed
+                      ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                      : isOnTrial
                         ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-                        : isOnTrial
-                          ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-                          : "bg-gray-500/20 text-gray-400 border-gray-500/30"
-                    }`}
+                        : "bg-gray-500/20 text-gray-400 border-gray-500/30"
+                      }`}
                   >
                     {isSubscribed ? "Pro" : isOnTrial ? "Trial" : "Free"}
                   </span>
                 </div>
                 <button
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-black text-sm font-semibold rounded-lg transition-colors"
                   onClick={onShowPlanModal}
                 >
                   Manage Plan
                 </button>
 
                 {!isSubscribed && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <h4 className="text-red-400 font-medium mb-2">
+                  <div className="p-4 bg-[var(--primary)]/10 border border-[var(--primary)]/20 rounded-lg">
+                    <h4 className="text-[var(--primary)] font-medium mb-2">
                       {isOnTrial ? "Upgrade to Pro" : "Upgrade to Premium"}
                     </h4>
                     <p className="text-sm text-gray-300 mb-3">
@@ -359,7 +361,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                         ? "Your trial will end soon. Upgrade to continue enjoying premium features."
                         : "Get access to advanced features and higher limits"}
                     </p>
-                    <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+                    <button className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-black text-sm font-semibold rounded-lg transition-colors">
                       {isOnTrial ? "Upgrade Now" : "Upgrade Now"}
                     </button>
                   </div>
@@ -478,15 +480,14 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                       <motion.button
                         key={item.id}
                         onClick={() => setActiveSection(item.id)}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          activeSection === item.id
-                            ? "text-white"
-                            : "text-gray-300 hover:text-white"
-                        }`}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeSection === item.id
+                          ? "text-white"
+                          : "text-gray-300 hover:text-white"
+                          }`}
                         style={{
                           background:
                             activeSection === item.id
-                              ? "rgba(239, 68, 68, 0.3)"
+                              ? "#ccff00c4"
                               : "transparent",
                           backdropFilter:
                             activeSection === item.id ? "blur(10px)" : "none",
@@ -494,7 +495,7 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
                             activeSection === item.id ? "blur(10px)" : "none",
                           border:
                             activeSection === item.id
-                              ? "1px solid rgba(239, 68, 68, 0.3)"
+                              ? "1px solid #ccff00c4"
                               : "1px solid transparent",
                         }}
                         onMouseEnter={(e) => {
@@ -546,16 +547,9 @@ const SettingsPage = ({ isOpen, onClose, user, onShowPlanModal }) => {
             >
               <motion.button
                 onClick={onClose}
-                className="px-6 py-2 text-white font-medium rounded-lg transition-all duration-200"
-                style={{
-                  background: "rgba(239, 68, 68, 0.3)",
-                  backdropFilter: "blur(10px)",
-                  WebkitBackdropFilter: "blur(10px)",
-                  border: "1px solid rgba(239, 68, 68, 0.4)",
-                }}
+                className="px-6 py-2 text-black font-bold rounded-lg transition-all duration-200 bg-[var(--primary)] hover:bg-[var(--primary)]/90"
                 whileHover={{
-                  scale: 1.02,
-                  background: "rgba(239, 68, 68, 0.4)",
+                  scale: 1.02
                 }}
                 whileTap={{ scale: 0.98 }}
               >

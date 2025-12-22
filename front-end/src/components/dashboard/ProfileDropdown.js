@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Settings, 
-  HelpCircle, 
-  ChevronRight, 
-  Gamepad2, 
+import {
+  Settings,
+  HelpCircle,
+  ChevronRight,
+  Gamepad2,
   LogOut,
   User
 } from 'lucide-react';
 
-const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) => {
+const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose, positionClass }) => {
   const [showVideoTutorials, setShowVideoTutorials] = useState(false);
 
   // Debug user object to see subscription data
@@ -49,33 +49,33 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0, y: -10, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="absolute right-0 top-full mt-2 w-80 rounded-xl shadow-2xl overflow-hidden z-50 backdrop-blur-xl text-white"
+          className={`absolute rounded-xl shadow-2xl overflow-hidden z-50 backdrop-blur-xl text-white ${positionClass || "right-0 top-full mt-2 w-80"}`}
           style={{
             background: 'rgba(30, 30, 30, 0.95)',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
           }}
         >
           {/* User Info Header */}
-          <div 
+          <div
             className="p-4"
             style={{
               background: '#2A2A2A'
             }}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-rose-500 flex items-center justify-center overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[var(--primary)] to-emerald-500 flex items-center justify-center overflow-hidden">
                 {user?.avatar ? (
-                  <img 
-                    src={user.avatar} 
-                    alt="User Avatar" 
+                  <img
+                    src={user.avatar}
+                    alt="User Avatar"
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <User size={20} className="text-white" />
+                  <User size={20} className="text-black" />
                 )}
               </div>
               <div>
@@ -90,7 +90,7 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
           </div>
 
           {/* Menu Items */}
-          <div 
+          <div
             className="py-2"
             style={{
               background: 'rgba(30, 30, 30, 0.3)'
@@ -99,7 +99,7 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
             {/* Settings */}
             <button
               onClick={handleSettings}
-              className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+              className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
               style={{
                 background: 'transparent'
               }}
@@ -117,7 +117,7 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
             {/* Help */}
             <button
               onClick={handleHelp}
-              className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+              className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
               style={{
                 background: 'transparent'
               }}
@@ -136,7 +136,7 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
             <div className="relative">
               <button
                 onClick={() => setShowVideoTutorials(!showVideoTutorials)}
-                className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+                className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
                 style={{
                   background: 'transparent'
                 }}
@@ -151,16 +151,15 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
                   e.target.style.WebkitBackdropFilter = 'none';
                 }}
               >
-                <ChevronRight 
-                  size={16} 
-                  className={`transition-transform duration-200 ${
-                    showVideoTutorials ? 'rotate-90' : ''
-                  }`}
+                <ChevronRight
+                  size={16}
+                  className={`transition-transform duration-200 ${showVideoTutorials ? 'rotate-90' : ''
+                    }`}
                   style={{ color: '#B0B0B0' }}
                 />
                 <span style={{ color: '#FFFFFF' }}>Video tutorials</span>
               </button>
-              
+
               {/* Video Tutorials Submenu */}
               <AnimatePresence>
                 {showVideoTutorials && (
@@ -171,9 +170,9 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
                     className="overflow-hidden"
                   >
                     <div className="pl-8 py-2 space-y-1">
-                      <button 
-                        className="w-full px-4 py-2 text-left text-xs transition-colors focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
-                        style={{ 
+                      <button
+                        className="w-full px-4 py-2 text-left text-xs transition-colors focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
+                        style={{
                           color: '#B0B0B0',
                           background: 'transparent'
                         }}
@@ -188,9 +187,9 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
                       >
                         Getting Started
                       </button>
-                      <button 
-                        className="w-full px-4 py-2 text-left text-xs transition-colors focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
-                        style={{ 
+                      <button
+                        className="w-full px-4 py-2 text-left text-xs transition-colors focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
+                        style={{
                           color: '#B0B0B0',
                           background: 'transparent'
                         }}
@@ -205,9 +204,9 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
                       >
                         Advanced Features
                       </button>
-                      <button 
-                        className="w-full px-4 py-2 text-left text-xs transition-colors focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
-                        style={{ 
+                      <button
+                        className="w-full px-4 py-2 text-left text-xs transition-colors focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
+                        style={{
                           color: '#B0B0B0',
                           background: 'transparent'
                         }}
@@ -231,7 +230,7 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
             {/* Join our Discord */}
             <button
               onClick={handleDiscord}
-              className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+              className="w-full px-4 py-3 text-left text-sm text-white flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
               style={{
                 background: 'transparent'
               }}
@@ -247,8 +246,8 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
             </button>
 
             {/* Divider */}
-            <div className="my-2" style={{ 
-              height: '1px', 
+            <div className="my-2" style={{
+              height: '1px',
               background: 'rgba(255, 255, 255, 0.05)',
               margin: '8px 0'
             }}></div>
@@ -256,20 +255,20 @@ const ProfileDropdown = ({ user, onLogout, onSettingsClick, isOpen, onClose }) =
             {/* My Plan */}
             <div className="px-4 py-3 flex items-center justify-between">
               <span className="text-sm" style={{ color: '#B0B0B0' }}>My plan</span>
-              <span className="px-2 py-1 text-xs font-medium rounded-full border" style={{ 
-                background: (user?.subscriptionStatus === 'active' || user?.subscriptionStatus === 'trial') ? 'rgba(59, 130, 246, 0.2)' : 'rgba(156, 163, 175, 0.2)',
-                color: (user?.subscriptionStatus === 'active' || user?.subscriptionStatus === 'trial') ? '#60A5FA' : '#9CA3AF',
-                borderColor: (user?.subscriptionStatus === 'active' || user?.subscriptionStatus === 'trial') ? 'rgba(59, 130, 246, 0.3)' : 'rgba(156, 163, 175, 0.3)'
+              <span className="px-2 py-1 text-xs font-medium rounded-full border" style={{
+                background: (user?.subscriptionStatus === 'active' || user?.subscriptionStatus === 'trial') ? 'rgba(var(--primary-rgb), 0.2)' : 'rgba(156, 163, 175, 0.2)',
+                color: (user?.subscriptionStatus === 'active' || user?.subscriptionStatus === 'trial') ? 'var(--primary)' : '#9CA3AF',
+                borderColor: (user?.subscriptionStatus === 'active' || user?.subscriptionStatus === 'trial') ? 'rgba(var(--primary-rgb), 0.3)' : 'rgba(156, 163, 175, 0.3)'
               }}>
-                {user?.subscriptionStatus === 'active' ? 'Pro' : 
-                 user?.subscriptionStatus === 'trial' ? 'Trial' : 'Free'}
+                {user?.subscriptionStatus === 'active' ? 'Pro' :
+                  user?.subscriptionStatus === 'trial' ? 'Trial' : 'Free'}
               </span>
             </div>
 
             {/* Log out */}
             <button
               onClick={handleLogout}
-              className="w-full px-4 py-3 text-left text-sm text-red-400 flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+              className="w-full px-4 py-3 text-left text-sm text-[var(--primary)] flex items-center gap-3 transition-all duration-200 focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
               style={{
                 background: 'transparent'
               }}

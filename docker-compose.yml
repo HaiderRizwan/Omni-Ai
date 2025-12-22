@@ -1,0 +1,29 @@
+services:
+  backend:
+    image: abdullahmansoor04/omni-backend:latest
+    # build:
+    #   context: ./omni-master
+    #   dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./env_docker
+    networks:
+      - app-network
+
+  frontend:
+    image: abdullahmansoor04/omni-frontend:latest
+    # build:
+    #   context: ./front-end
+    #   dockerfile: Dockerfile
+    #   args: ... (args are bake-in at build time for image)
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

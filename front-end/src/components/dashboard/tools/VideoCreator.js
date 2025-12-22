@@ -11,14 +11,14 @@ const VideoCreator = ({ avatars = [] }) => {
   const [jobStatus, setJobStatus] = useState(null);
   const [finalVideoUrl, setFinalVideoUrl] = useState(null);
   const [compatibleAvatars, setCompatibleAvatars] = useState([]);
-  
+
   // Audio options
   const [audioMode, setAudioMode] = useState('tts'); // 'tts' or 'upload'
   const [selectedVoice, setSelectedVoice] = useState(null);
   const [uploadedAudio, setUploadedAudio] = useState(null);
   const [availableVoices, setAvailableVoices] = useState([]);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
-  
+
   // Video options
   const [videoOptions, setVideoOptions] = useState({
     skipSmartMotion: true, // Faster generation
@@ -33,7 +33,7 @@ const VideoCreator = ({ avatars = [] }) => {
       font: 'Arial'
     }
   });
-  
+
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
 
   useEffect(() => {
@@ -88,7 +88,7 @@ const VideoCreator = ({ avatars = [] }) => {
             clearInterval(interval);
           }
           if (result.data.status === 'failed') {
-            try { (window.__toast?.push || (()=>{}))({ message: `Video generation failed: ${result.data.error || 'Unknown error'}`, type: 'error' }); } catch(_) {}
+            try { (window.__toast?.push || (() => { }))({ message: `Video generation failed: ${result.data.error || 'Unknown error'}`, type: 'error' }); } catch (_) { }
             clearInterval(interval);
           }
         }
@@ -99,30 +99,30 @@ const VideoCreator = ({ avatars = [] }) => {
 
   const handleGenerate = async () => {
     if (!selectedAvatar || !script.trim()) {
-      try { (window.__toast?.push || (()=>{}))({ message: 'Please select an avatar and enter a script.', type: 'warning' }); } catch(_) {}
+      try { (window.__toast?.push || (() => { }))({ message: 'Please select an avatar and enter a script.', type: 'warning' }); } catch (_) { }
       return;
     }
-    
+
     if (audioMode === 'tts' && !selectedVoice) {
-      try { (window.__toast?.push || (()=>{}))({ message: 'Please select a voice for text-to-speech.', type: 'warning' }); } catch(_) {}
+      try { (window.__toast?.push || (() => { }))({ message: 'Please select a voice for text-to-speech.', type: 'warning' }); } catch (_) { }
       return;
     }
-    
+
     if (audioMode === 'upload' && !uploadedAudio) {
-      try { (window.__toast?.push || (()=>{}))({ message: 'Please upload an audio file.', type: 'warning' }); } catch(_) {}
+      try { (window.__toast?.push || (() => { }))({ message: 'Please upload an audio file.', type: 'warning' }); } catch (_) { }
       return;
     }
-    
+
     setIsGenerating(true);
     setFinalVideoUrl(null);
     setJobStatus('starting');
-    
+
     const token = safeLocalStorage.getItem('token');
     const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
     try {
       let requestBody;
-      
+
       if (audioMode === 'upload') {
         // Use FormData for audio upload
         const formData = new FormData();
@@ -130,13 +130,13 @@ const VideoCreator = ({ avatars = [] }) => {
         formData.append('script', script);
         formData.append('audioFile', uploadedAudio);
         formData.append('options', JSON.stringify(videoOptions));
-        
+
         const response = await fetch(`${apiBase}/api/videos/generate-with-audio`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
-        
+
         const result = await response.json();
         if (result.success) {
           setJobId(result.data.jobId);
@@ -153,13 +153,13 @@ const VideoCreator = ({ avatars = [] }) => {
           title: `AI Video - ${new Date().toLocaleDateString()}`,
           options: videoOptions
         };
-        
+
         const response = await fetch(`${apiBase}/api/videos/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(requestBody)
         });
-        
+
         const result = await response.json();
         if (result.success) {
           setJobId(result.data.jobId);
@@ -170,13 +170,13 @@ const VideoCreator = ({ avatars = [] }) => {
       }
     } catch (error) {
       console.error('Video generation error:', error);
-      try { (window.__toast?.push || (()=>{}))({ message: `Error: ${error.message}`, type: 'error' }); } catch(_) {}
+      try { (window.__toast?.push || (() => { }))({ message: `Error: ${error.message}`, type: 'error' }); } catch (_) { }
       setJobStatus(null);
     } finally {
       setIsGenerating(false);
     }
   };
-  
+
   return (
     <div className="h-full flex flex-col p-4">
 
@@ -193,7 +193,7 @@ const VideoCreator = ({ avatars = [] }) => {
                 <button
                   key={avatar._id}
                   onClick={() => setSelectedAvatar(avatar._id)}
-                  className={`group text-left bg-white/5 border ${selectedAvatar === avatar._id ? 'border-red-500 ring-2 ring-red-500/20' : 'border-white/10 hover:border-white/20'} rounded-xl overflow-hidden transition-all`}
+                  className={`group text-left bg-white/5 border ${selectedAvatar === avatar._id ? 'border-[var(--primary)] ring-2 ring-[var(--primary)]/20' : 'border-white/10 hover:border-white/20'} rounded-xl overflow-hidden transition-all`}
                   title={avatar.prompt}
                 >
                   <div className="relative">
@@ -203,7 +203,7 @@ const VideoCreator = ({ avatars = [] }) => {
                       className="w-full h-28 object-cover"
                     />
                     {selectedAvatar === avatar._id && (
-                      <div className="absolute inset-0 bg-red-500/10" />
+                      <div className="absolute inset-0 bg-[var(--primary)]/10" />
                     )}
                   </div>
                   <div className="p-2 border-t border-white/10">
@@ -241,7 +241,7 @@ const VideoCreator = ({ avatars = [] }) => {
               }
             }}
             placeholder="Enter what you want your avatar to say..."
-            className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 resize-none max-h-40"
+            className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-[var(--primary)]/50 focus:ring-2 focus:ring-[var(--primary)]/20 resize-none max-h-40"
             rows="3"
           />
         </div>
@@ -252,27 +252,25 @@ const VideoCreator = ({ avatars = [] }) => {
             <Volume2 className="w-5 h-5" />
             Audio Options
           </h3>
-          
+
           {/* Audio Mode Selection */}
           <div className="flex gap-3 mb-4">
             <button
               onClick={() => setAudioMode('tts')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                audioMode === 'tts'
-                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
-                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${audioMode === 'tts'
+                ? 'bg-[var(--primary)] text-black'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
             >
               <Mic className="w-4 h-4" />
               Text-to-Speech
             </button>
             <button
               onClick={() => setAudioMode('upload')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                audioMode === 'upload'
-                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
-                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${audioMode === 'upload'
+                ? 'bg-[var(--primary)] text-black'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
             >
               <FileAudio className="w-4 h-4" />
               Upload Audio
@@ -293,7 +291,7 @@ const VideoCreator = ({ avatars = [] }) => {
                   <select
                     value={selectedVoice || ''}
                     onChange={(e) => setSelectedVoice(e.target.value)}
-                  className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-red-500/50"
+                    className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-[var(--primary)]/50"
                   >
                     <option value="">Choose a voice...</option>
                     {availableVoices.map(group => (
@@ -320,7 +318,7 @@ const VideoCreator = ({ avatars = [] }) => {
                   type="file"
                   accept="audio/*"
                   onChange={(e) => setUploadedAudio(e.target.files[0])}
-                  className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-red-500 file:text-white hover:file:bg-red-600"
+                  className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[var(--primary)] file:text-black hover:file:bg-[var(--primary)]/90"
                 />
               </div>
               {uploadedAudio && (
@@ -341,12 +339,12 @@ const VideoCreator = ({ avatars = [] }) => {
             </h3>
             <button
               onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-              className="text-sm text-red-400 hover:text-red-300 transition-colors"
+              className="text-sm text-[var(--primary)] hover:text-[var(--primary)]/80 transition-colors"
             >
               {showAdvancedOptions ? 'Hide Advanced' : 'Show Advanced'}
             </button>
           </div>
-          
+
           {/* Basic Options */}
           <div className="space-y-3">
             <label className="flex items-center gap-3 text-gray-300">
@@ -358,7 +356,7 @@ const VideoCreator = ({ avatars = [] }) => {
               />
               <span>Enable Smart Motion (slower but higher quality)</span>
             </label>
-            
+
             <label className="flex items-center gap-3 text-gray-300">
               <input
                 type="checkbox"
@@ -397,7 +395,7 @@ const VideoCreator = ({ avatars = [] }) => {
                     <Palette className="w-4 h-4" />
                     Caption Settings
                   </h4>
-                  
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-sm text-gray-400 mb-1 block">Font Size</label>
@@ -413,7 +411,7 @@ const VideoCreator = ({ avatars = [] }) => {
                         className="w-full p-2 rounded-lg bg-black/30 border border-white/10 text-white"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="text-sm text-gray-400 mb-1 block">Position</label>
                       <select
@@ -442,7 +440,7 @@ const VideoCreator = ({ avatars = [] }) => {
         <button
           onClick={handleGenerate}
           disabled={isGenerating || !selectedAvatar || !script.trim()}
-          className="w-full p-4 rounded-2xl bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 text-lg font-medium"
+          className="w-full p-4 rounded-xl bg-white text-black hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 text-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
         >
           {isGenerating ? (
             <>

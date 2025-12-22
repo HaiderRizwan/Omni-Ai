@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { LogOut, Bell, Settings } from 'lucide-react';
 import Sidebar from './dashboard/Sidebar';
 import MainPanel from './dashboard/MainPanel';
 import AvatarGallery from './dashboard/tools/Avatarsgallery';
-import TopNavbar from './dashboard/TopNavbar';
+import Navbar from './dashboard/Navbar';
 import SettingsPage from './dashboard/SettingsPage';
 import { useAllChatHistories, chatHistoryManager } from './dashboard/ChatHistory';
 import safeLocalStorage from '../utils/localStorage';
@@ -12,7 +10,7 @@ import PlanModal from './dashboard/PlanModal';
 
 function Dashboard({ user, onLogout }) {
   const [currentUser, setCurrentUser] = useState(user);
-  const [activeTool, setActiveTool] = useState('chat');
+  const [activeTool, setActiveTool] = useState('overview');
   const [currentChat, setCurrentChat] = useState(null);
   const { allHistories, refreshHistories } = useAllChatHistories();
   const [serverChats, setServerChats] = useState([]);
@@ -63,9 +61,9 @@ function Dashboard({ user, onLogout }) {
       if (!res.ok) return;
       const json = await res.json();
       if (json?.success && Array.isArray(json.data.avatars)) {
-        console.log('[Dashboard] Loaded avatars with A2E compatibility:', 
-          json.data.avatars.filter(a => a.isA2ECompatible).length, 
-          'compatible out of', 
+        console.log('[Dashboard] Loaded avatars with A2E compatibility:',
+          json.data.avatars.filter(a => a.isA2ECompatible).length,
+          'compatible out of',
           json.data.avatars.length, 'total'
         );
         setAvatarCollection(json.data.avatars);
@@ -128,7 +126,7 @@ function Dashboard({ user, onLogout }) {
     loadPlans();
     // Remove any existing duplicates from local storage
     chatHistoryManager.removeAllDuplicates();
-    
+
     // Expose cleanup function globally for debugging
     window.cleanupDuplicateChats = cleanupDuplicates;
   }, []);
@@ -169,7 +167,7 @@ function Dashboard({ user, onLogout }) {
           const url = new URL(window.location.href);
           url.searchParams.delete('session_id');
           window.history.replaceState({}, document.title, url.toString());
-        } catch (_) {}
+        } catch (_) { }
       }
     };
 
@@ -226,7 +224,7 @@ function Dashboard({ user, onLogout }) {
     if (!serverChats || serverChats.length === 0 || isUpdatingChat) return;
     try {
       let mutated = false;
-      
+
       // Process each chat type separately
       const chatTypes = {
         'text': 'chat',
@@ -235,25 +233,25 @@ function Dashboard({ user, onLogout }) {
         'video': 'video',
         'avatarVideo': 'avatarVideo'
       };
-      
+
       Object.entries(chatTypes).forEach(([serverType, toolId]) => {
         const chatsOfType = serverChats.filter(c => c.chatType === serverType);
         if (chatsOfType.length === 0) return;
-        
+
         // Get current histories directly from chatHistoryManager to avoid stale state
         const existing = chatHistoryManager.getHistory(toolId);
         const byServerId = new Map(existing.filter(c => c.serverId).map(c => [c.serverId, c]));
-        
+
         chatsOfType.forEach(c => {
           const sid = c._id;
           if (!byServerId.has(sid)) {
             // Check if there's a local chat without serverId that might be the same chat
-            const localChatWithoutServerId = existing.find(localChat => 
-              !localChat.serverId && 
+            const localChatWithoutServerId = existing.find(localChat =>
+              !localChat.serverId &&
               localChat.title === c.title &&
               Math.abs(new Date(localChat.timestamp).getTime() - new Date(c.createdAt || Date.now()).getTime()) < 60000 // Within 1 minute
             );
-            
+
             if (localChatWithoutServerId) {
               // Update the existing local chat with serverId instead of creating a new one
               console.log(`[Reconciliation] Updating existing local chat with serverId: ${sid} (${serverType})`, {
@@ -268,12 +266,12 @@ function Dashboard({ user, onLogout }) {
               mutated = true;
             } else {
               // Create a new chat entry only if it doesn't already exist
-              const existingChat = existing.find(existingChat => 
-                existingChat.serverId === sid || 
-                (existingChat.title === c.title && 
-                 Math.abs(new Date(existingChat.timestamp).getTime() - new Date(c.createdAt || Date.now()).getTime()) < 60000)
+              const existingChat = existing.find(existingChat =>
+                existingChat.serverId === sid ||
+                (existingChat.title === c.title &&
+                  Math.abs(new Date(existingChat.timestamp).getTime() - new Date(c.createdAt || Date.now()).getTime()) < 60000)
               );
-              
+
               if (!existingChat) {
                 console.log(`[Reconciliation] Adding new server chat to local history: ${sid} (${serverType})`, {
                   title: c.title,
@@ -295,7 +293,7 @@ function Dashboard({ user, onLogout }) {
           }
         });
       });
-      
+
       if (mutated) {
         console.log('Reconciliation mutated, refreshing histories');
         refreshHistories();
@@ -321,11 +319,11 @@ function Dashboard({ user, onLogout }) {
 
   const handleChatSelect = async (toolId, chatId) => {
     console.log(`Chat selected: ${toolId}/${chatId}`);
-    
+
     // Handle server chat IDs (format: server-${serverId})
     let serverId = null;
     let local = null;
-    
+
     if (chatId.startsWith('server-')) {
       serverId = chatId.replace('server-', '');
       console.log(`Server chat selected: ${serverId}`);
@@ -334,7 +332,7 @@ function Dashboard({ user, onLogout }) {
       console.log('Local chat found:', local);
       serverId = local?.serverId || local?._id;
     }
-    
+
     setActiveTool(toolId);
 
     // If this chat maps to a server id, fetch full messages
@@ -366,12 +364,12 @@ function Dashboard({ user, onLogout }) {
               }))
             };
             setCurrentChat(mapped);
-            
+
             // Only update local storage if this was a local chat
             if (local) {
-            chatHistoryManager.updateChat(toolId, local.id, mapped);
+              chatHistoryManager.updateChat(toolId, local.id, mapped);
             }
-            
+
             console.log('Updated chat with server data');
             return;
           }
@@ -382,10 +380,10 @@ function Dashboard({ user, onLogout }) {
         setIsUpdatingChat(false); // Re-enable reconciliation
       }
     }
-    
+
     // Fallback to local chat
     if (local) {
-    setCurrentChat(local);
+      setCurrentChat(local);
     } else {
       setCurrentChat(null);
     }
@@ -395,13 +393,13 @@ function Dashboard({ user, onLogout }) {
     try {
       const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const token = safeLocalStorage.getItem('token');
-      
+
       // Handle server chat IDs
       let actualServerId = serverId;
       if (chatId.startsWith('server-')) {
         actualServerId = chatId.replace('server-', '');
       }
-      
+
       if (actualServerId) {
         const res = await fetch(`${apiBase}/api/chat/${actualServerId}`, {
           method: 'DELETE',
@@ -409,7 +407,7 @@ function Dashboard({ user, onLogout }) {
         });
         if (!res.ok) {
           const txt = await res.text().catch(() => '');
-          try { (window.__toast?.push || (()=>{}))({ message: `Failed to delete on server: ${res.status}${txt ? ` - ${txt}` : ''}`, type: 'error' }); } catch(_) {}
+          try { (window.__toast?.push || (() => { }))({ message: `Failed to delete on server: ${res.status}${txt ? ` - ${txt}` : ''}`, type: 'error' }); } catch (_) { }
         } else {
           // Ensure the deleted server chat is removed from serverChats state to prevent reconciliation from re-adding it locally
           setServerChats(prev => (Array.isArray(prev) ? prev.filter(c => c && c._id !== actualServerId) : prev));
@@ -420,7 +418,7 @@ function Dashboard({ user, onLogout }) {
     } finally {
       // Only delete from local storage if it's not a server chat
       if (!chatId.startsWith('server-')) {
-      chatHistoryManager.deleteChat(toolId, chatId);
+        chatHistoryManager.deleteChat(toolId, chatId);
       }
       refreshHistories();
       if (currentChat?.id === chatId) {
@@ -431,28 +429,28 @@ function Dashboard({ user, onLogout }) {
 
   const handleNewChat = async (toolId = 'chat') => {
     // Check if current chat is empty (no messages and no serverId)
-    const isCurrentChatEmpty = currentChat && 
-      (!currentChat.messages || currentChat.messages.length === 0) && 
+    const isCurrentChatEmpty = currentChat &&
+      (!currentChat.messages || currentChat.messages.length === 0) &&
       !currentChat.serverId;
-    
+
     // If current chat is empty, don't create a new one
     if (isCurrentChatEmpty) {
       return currentChat;
     }
-    
+
     // Create a local-only chat without backend API call under the desired tool
     // Backend chat will be created when user sends first message
-      const selectedTool = toolId || 'chat';
-      const newChat = chatHistoryManager.addChat(selectedTool, {
-        title: `New ${selectedTool} Chat`,
+    const selectedTool = toolId || 'chat';
+    const newChat = chatHistoryManager.addChat(selectedTool, {
+      title: `New ${selectedTool} Chat`,
       messages: [],
       serverId: null // No server ID until first message is sent
-      });
-    
-      setActiveTool(selectedTool);
-      setCurrentChat(newChat);
-      refreshHistories();
-      return newChat;
+    });
+
+    setActiveTool(selectedTool);
+    setCurrentChat(newChat);
+    refreshHistories();
+    return newChat;
   };
 
   const handleChatUpdate = (updates) => {
@@ -460,16 +458,16 @@ function Dashboard({ user, onLogout }) {
     console.log('Current chat:', currentChat);
     console.log('Updates:', updates);
     console.log('========================');
-    
+
     if (currentChat) {
       // Update existing chat
       const updatedChat = { ...currentChat, ...updates };
       chatHistoryManager.updateChat(activeTool, currentChat.id, updates);
       setCurrentChat(updatedChat);
       refreshHistories();
-      
+
       console.log('Updated chat:', updatedChat);
-      
+
       // If the chat got a serverId, add it to the serverChats state to avoid race conditions
       if (updates.serverId && !currentChat.serverId) {
         const newServerChat = {
@@ -491,12 +489,12 @@ function Dashboard({ user, onLogout }) {
         messages: updates.messages || [],
         timestamp: Date.now()
       };
-      
+
       // Add to local history and set as current
       chatHistoryManager.addChat(activeTool, newChat);
       setCurrentChat(newChat);
       refreshHistories();
-      
+
       // Also add to serverChats state to keep it in sync
       const newServerChat = {
         _id: updates.serverId,
@@ -535,12 +533,18 @@ function Dashboard({ user, onLogout }) {
   const handleClosePlanModal = () => setShowPlanModal(false);
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-white flex">
-      {/* Top Navigation Bar */}
-      <TopNavbar user={currentUser} onLogout={onLogout} onSettingsClick={handleSettingsClick} />
-
+    <div className="min-h-screen bg-noir-900 text-white flex flex-col overflow-hidden">
+      <Navbar
+        user={currentUser}
+        onLogout={onLogout}
+        activeTool={activeTool}
+        allHistories={allHistories}
+        onToolSelect={handleToolSelect}
+        onNewChat={() => handleNewChat('chat')}
+        onSettingsClick={handleSettingsClick}
+      />
       {/* Main Layout */}
-      <div className="flex-1 flex pt-16 min-h-0">
+      <div className="flex-1 flex h-screen overflow-hidden pt-[72px]">
         {/* Sidebar */}
         <Sidebar
           activeTool={activeTool}
@@ -552,17 +556,23 @@ function Dashboard({ user, onLogout }) {
           onDeleteChat={handleDeleteChat}
           user={currentUser}
           onUserUpdate={handleUserUpdate}
+          onLogout={onLogout}
+          onSettingsClick={handleSettingsClick}
         />
 
         {/* Main Panel */}
-        <MainPanel
-          activeTool={activeTool}
-          currentChat={currentChat}
-          onChatUpdate={handleChatUpdate}
-          onNewChat={handleNewChat}
-          avatarCollection={avatarCollection}
-          setAvatarCollection={setAvatarCollection}
-        />
+        <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-spring" style={{ marginLeft: 'var(--sidebar-w, 16rem)' }}>
+          <MainPanel
+            activeTool={activeTool}
+            currentChat={currentChat}
+            onChatUpdate={handleChatUpdate}
+            onNewChat={handleNewChat}
+            avatarCollection={avatarCollection}
+            setAvatarCollection={setAvatarCollection}
+            user={currentUser}
+            onToolSelect={handleToolSelect}
+          />
+        </div>
 
       </div>
 
@@ -570,15 +580,15 @@ function Dashboard({ user, onLogout }) {
 
       {/* Avatar Gallery */}
       {showAvatarGallery && (
-        <AvatarGallery 
-          onClose={() => setShowAvatarGallery(false)} 
+        <AvatarGallery
+          onClose={() => setShowAvatarGallery(false)}
           onAddToCollection={handleAddToCollection}
         />
       )}
 
       {/* Settings Modal */}
-      <SettingsPage 
-        isOpen={showSettings} 
+      <SettingsPage
+        isOpen={showSettings}
         onClose={handleBackFromSettings}
         user={currentUser}
         onShowPlanModal={handleShowPlanModal}

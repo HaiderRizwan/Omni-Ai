@@ -1,0 +1,33 @@
+<svg viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+      @keyframes revSpin { 100% { transform: rotate(-360deg); } }
+      @keyframes pulse { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 0.8; } }
+      .core { animation: pulse 3s infinite ease-in-out; transform-origin: 400px 400px; }
+      .outer { animation: spin 20s infinite linear; transform-origin: 400px 400px; }
+      .inner { animation: revSpin 15s infinite linear; transform-origin: 400px 400px; }
+    </style>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a8eb12" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#8b5cf6" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.2" />
+    </linearGradient>
+  </defs>
+
+  <circle cx="400" cy="400" r="300" fill="#a8eb12" fill-opacity="0.1" />
+
+  <g class="outer">
+    <circle cx="400" cy="400" r="350" stroke="white" stroke-opacity="0.1" stroke-width="2" />
+    <path d="M400 50 A350 350 0 0 1 750 400" stroke="#a8eb12" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round" />
+  </g>
+
+  <g class="inner">
+    <path d="M400 150 L616 275 L616 525 L400 650 L184 525 L184 275 Z" stroke="url(#grad1)" stroke-width="3" stroke-opacity="0.6" fill="none" />
+  </g>
+
+  <g class="core">
+    <path d="M400 250 C482 250 550 317 550 400 C550 482 482 550 400 550 C317 550 250 482 250 400 C250 317 317 250 400 250 Z" stroke="#a8eb12" stroke-width="8" stroke-opacity="0.9" fill="none" />
+    <circle cx="400" cy="400" r="40" fill="#a8eb12" />
+  </g>
+</svg>

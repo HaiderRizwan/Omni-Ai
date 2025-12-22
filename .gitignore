@@ -79,3 +79,6 @@ uploads/
 # Package lock files (optional - you might want to keep these)
 # package-lock.json
 # yarn.lock
+
+# Docker secrets
+env_docker

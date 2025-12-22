@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-const ToastContext = createContext({ push: () => {} });
+const ToastContext = createContext({ push: () => { } });
 
 export const useToast = () => useContext(ToastContext);
 
@@ -11,15 +11,15 @@ const Toast = ({ toast, onClose }) => {
   }, [toast, onClose]);
 
   const colorByType = toast.type === 'error'
-    ? 'bg-red-600/90 border-red-400/50'
+    ? 'bg-[var(--primary)]/10 border-[var(--primary)]/50 text-[var(--primary)]'
     : toast.type === 'success'
-    ? 'bg-green-600/90 border-green-400/50'
-    : toast.type === 'warning'
-    ? 'bg-yellow-600/90 border-yellow-400/50'
-    : 'bg-gray-800/90 border-white/10';
+      ? 'bg-[var(--primary)]/10 border-[var(--primary)]/50 text-[var(--primary)]'
+      : toast.type === 'warning'
+        ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-200'
+        : 'bg-white/10 border-white/20 text-white';
 
   return (
-    <div className={`px-4 py-3 rounded-lg border shadow-lg text-sm text-white ${colorByType}`}
+    <div className={`px-4 py-3 rounded-xl border shadow-lg text-sm font-medium backdrop-blur-md ${colorByType}`}
       role="status"
       aria-live="polite"
     >

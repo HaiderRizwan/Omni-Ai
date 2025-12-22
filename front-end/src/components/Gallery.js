@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { Heart, Share2, TrendingUp, Zap } from 'lucide-react';
 
 function Gallery() {
   const [loadingImages, setLoadingImages] = useState(new Set());
@@ -99,109 +100,89 @@ function Gallery() {
   };
 
   return (
-    <section className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 py-20" id="community">
-      <div className="max-w-7xl mx-auto px-6">
-        <motion.div 
+    <section className="min-h-screen bg-noir-900 py-24 relative overflow-hidden" id="community">
+      {/* Background Gradients */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-gradient-to-b from-noir-800 to-transparent opacity-50 pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <motion.div
           className="text-center mb-16"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <h2 className="text-5xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-red-400 bg-clip-text text-transparent mb-4">
-            Trending Creations
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-[var(--primary)] mb-6">
+            <TrendingUp size={14} />
+            <span>Community Showcase</span>
+          </div>
+          <h2 className="text-5xl md:text-6xl font-heading font-black tracking-tighter text-white mb-6">
+            TRENDING <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary)] to-emerald-400">CREATIONS</span>
           </h2>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Discover amazing AI-generated artwork from our creative community
+          <p className="text-xl text-white/50 max-w-2xl mx-auto font-light">
+            Discover precision-engineered artwork from our elite creative network.
           </p>
         </motion.div>
-      
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {images.map((image, idx) => (
-          <motion.div
-            key={image.id}
-            className="card"
-            initial={{ opacity: 0, y: 30, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ 
-              delay: idx * 0.1, 
-              duration: 0.6,
-              type: "spring",
-              stiffness: 100
-            }}
-            whileHover={{ 
-              scale: 1.02,
-              transition: { duration: 0.2 }
-            }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <div className="image-skeleton" style={{ 
-              display: loadingImages.has(image.id) ? 'block' : 'none' 
-            }}>
-              <div className="shimmer"></div>
-            </div>
-            
-            <div className="card-actions">
-              <button className="card-action-btn" title="Like">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                </svg>
-              </button>
-              <button className="card-action-btn" title="Share">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                  <polyline points="16,6 12,2 8,6"/>
-                  <line x1="12" y1="2" x2="12" y2="15"/>
-                </svg>
-              </button>
-            </div>
+            <motion.div
+              key={image.id}
+              className="group relative bg-noir-800 rounded-2xl overflow-hidden border border-white/5 hover:border-[var(--primary)]/50 transition-colors"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ delay: idx * 0.05, duration: 0.5 }}
+              whileHover={{ y: -8 }}
+            >
+              {/* Loading Skeleton */}
+              <div
+                className="absolute inset-0 bg-white/5 animate-pulse z-20"
+                style={{ display: loadingImages.has(image.id) ? 'block' : 'none' }}
+              />
 
-            <img
-              src={image.url}
-              alt={image.title}
-              loading="lazy"
-              onLoadStart={() => handleImageStart(image.id)}
-              onLoad={() => handleImageLoad(image.id)}
-              onError={(e) => handleImageError(image.id, e)}
-              style={{ 
-                display: loadingImages.has(image.id) ? 'none' : 'block',
-                opacity: loadedImages.has(image.id) ? 1 : 0,
-                transition: 'opacity 0.3s ease'
-              }}
-            />
-
-            <div className="card-content">
-              <h3 className="card-title">{image.title}</h3>
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginTop: '8px'
-              }}>
-                <span style={{ 
-                  fontSize: '12px', 
-                  color: '#8b93ff', 
-                  background: 'rgba(139, 147, 255, 0.1)',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(139, 147, 255, 0.2)'
-                }}>
-                  {image.category}
-                </span>
-                <span style={{ 
-                  fontSize: '12px', 
-                  color: '#b8b9c9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                  </svg>
-                  {formatNumber(image.likes)}
-                </span>
+              {/* Overlay Actions */}
+              <div className="absolute top-3 right-3 z-30 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <button className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-[var(--primary)] hover:text-black transition-colors">
+                  <Heart size={16} />
+                </button>
+                <button className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white hover:bg-white hover:text-black transition-colors">
+                  <Share2 size={16} />
+                </button>
               </div>
-            </div>
-          </motion.div>
+
+              <div className="aspect-[4/3] overflow-hidden bg-noir-900">
+                <img
+                  src={image.url}
+                  alt={image.title}
+                  loading="lazy"
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  onLoadStart={() => handleImageStart(image.id)}
+                  onLoad={() => handleImageLoad(image.id)}
+                  onError={(e) => handleImageError(image.id, e)}
+                  style={{
+                    opacity: loadedImages.has(image.id) ? 1 : 0,
+                    transition: 'opacity 0.5s ease'
+                  }}
+                />
+              </div>
+
+              <div className="p-5">
+                <h3 className="font-heading font-bold text-lg text-white mb-3 group-hover:text-[var(--primary)] transition-colors truncate">{image.title}</h3>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold px-2 py-1 rounded bg-white/5 text-white/70 border border-white/5 group-hover:border-[var(--primary)]/30 transition-colors">
+                    {image.category}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-medium text-white/50">
+                    <Heart size={12} className={image.likes > 1500 ? "text-[var(--primary)] fill-[var(--primary)]" : ""} />
+                    {formatNumber(image.likes)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Glow Effect */}
+              <div className="absolute inset-0 border-2 border-[var(--primary)] rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-[0_0_30px_rgba(204,255,0,0.15)]" />
+            </motion.div>
           ))}
         </div>
       </div>

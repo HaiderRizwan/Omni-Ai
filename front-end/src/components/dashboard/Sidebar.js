@@ -23,7 +23,13 @@ import {
   Compass,
   PanelLeftClose,
   Share2,
+  LayoutDashboard,
+
 } from "lucide-react";
+
+import SearchChatModal from "./SearchChatModal";
+import ProfileDropdown from "./ProfileDropdown";
+
 
 const Sidebar = ({
   activeTool,
@@ -35,8 +41,10 @@ const Sidebar = ({
   onDeleteChat,
   user,
   onUserUpdate,
+  onLogout,
+  onSettingsClick,
 }) => {
-  const { theme, isDark, isRed } = useTheme();
+  const { theme, isDark } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       const v = safeLocalStorage.getItem("sidebarCollapsed");
@@ -45,8 +53,10 @@ const Sidebar = ({
       return false;
     }
   });
-  const [subscriptionStatus, setSubscriptionStatus] = useState("free"); // 'free', 'trial', 'active'
+  const [subscriptionStatus, setSubscriptionStatus] = useState("free");
   const [isCheckingSubscription, setIsCheckingSubscription] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   // Function to check subscription status from backend
   const checkSubscriptionStatus = async () => {
@@ -101,10 +111,10 @@ const Sidebar = ({
     const width = isCollapsed ? "4rem" : "16rem";
     try {
       document.documentElement.style.setProperty("--sidebar-w", width);
-    } catch (_) {}
+    } catch (_) { }
   }, [isCollapsed]);
 
-  // Keyboard shortcut: Ctrl/Cmd + B to toggle collapse
+  // Keyboard shortcut: Ctrl/Cmd + B to toggle collapse, Ctrl/Cmd + K for search
   useEffect(() => {
     const onKeyDown = (e) => {
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
@@ -114,7 +124,11 @@ const Sidebar = ({
         setIsCollapsed(next);
         try {
           safeLocalStorage.setItem("sidebarCollapsed", String(next));
-        } catch (_) {}
+        } catch (_) { }
+      }
+      if (isCtrlOrCmd && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setIsSearchOpen(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -180,7 +194,7 @@ const Sidebar = ({
     if (!phylloUserId) throw new Error("Invalid Phyllo user response");
     try {
       safeLocalStorage.setItem("phylloUserId", phylloUserId);
-    } catch (_) {}
+    } catch (_) { }
     return phylloUserId;
   };
 
@@ -224,11 +238,11 @@ const Sidebar = ({
         environment: process.env.REACT_APP_PHYLLO_ENV || "production",
         onAccountConnected: (account) => {
           try {
-            (window.__toast?.push || (() => {}))({
+            (window.__toast?.push || (() => { }))({
               message: "Account connected",
               type: "success",
             });
-          } catch (_) {}
+          } catch (_) { }
           console.log("Phyllo account connected:", account);
         },
         onExit: (info) => {
@@ -242,11 +256,11 @@ const Sidebar = ({
     } catch (e) {
       console.error("Phyllo Connect error:", e);
       try {
-        (window.__toast?.push || (() => {}))({
+        (window.__toast?.push || (() => { }))({
           message: e?.message || "Failed to start Connect",
           type: "error",
         });
-      } catch (_) {}
+      } catch (_) { }
     }
   };
 
@@ -256,11 +270,11 @@ const Sidebar = ({
       const token = safeLocalStorage.getItem("token");
       if (!token) {
         try {
-          (window.__toast?.push || (() => {}))({
+          (window.__toast?.push || (() => { }))({
             message: "Please log in first.",
             type: "warning",
           });
-        } catch (_) {}
+        } catch (_) { }
         return;
       }
 
@@ -271,11 +285,11 @@ const Sidebar = ({
       const profJson = await profRes.json().catch(() => ({}));
       if (!profRes.ok) {
         try {
-          (window.__toast?.push || (() => {}))({
+          (window.__toast?.push || (() => { }))({
             message: "Authentication invalid. Please log in again.",
             type: "error",
           });
-        } catch (_) {}
+        } catch (_) { }
         return;
       }
 
@@ -297,7 +311,7 @@ const Sidebar = ({
         !Array.isArray(plansJson.data) ||
         plansJson.data.length === 0
       ) {
-        await fetch(`${apiBase}/health`).catch(() => {});
+        await fetch(`${apiBase}/health`).catch(() => { });
         const retryRes = await fetch(`${apiBase}/api/subscriptions/plans`);
         const retryJson = await retryRes
           .json()
@@ -336,11 +350,11 @@ const Sidebar = ({
           onUserUpdate({ ...user, subscriptionStatus: "trial" });
         }
         try {
-          (window.__toast?.push || (() => {}))({
+          (window.__toast?.push || (() => { }))({
             message: "Trial started successfully!",
             type: "success",
           });
-        } catch (_) {}
+        } catch (_) { }
         return;
       }
 
@@ -361,11 +375,11 @@ const Sidebar = ({
       if (!upgradeRes.ok) {
         const err = await upgradeRes.json().catch(() => ({}));
         try {
-          (window.__toast?.push || (() => {}))({
+          (window.__toast?.push || (() => { }))({
             message: `Subscription failed: ${upgradeRes.status}${err?.message ? ` - ${err.message}` : ""}`,
             type: "error",
           });
-        } catch (_) {}
+        } catch (_) { }
         if (btn) {
           btn.disabled = false;
           btn.innerText = "Subscribe / Start Trial";
@@ -383,19 +397,19 @@ const Sidebar = ({
       safeLocalStorage.setItem("subscriptionStatus", "active");
       setSubscriptionStatus("active");
       try {
-        (window.__toast?.push || (() => {}))({
+        (window.__toast?.push || (() => { }))({
           message: "Subscription upgraded successfully!",
           type: "success",
         });
-      } catch (_) {}
+      } catch (_) { }
     } catch (error) {
       console.error("Subscribe error:", error);
       try {
-        (window.__toast?.push || (() => {}))({
+        (window.__toast?.push || (() => { }))({
           message: "Subscription failed. Please try again.",
           type: "error",
         });
-      } catch (_) {}
+      } catch (_) { }
     }
   };
 
@@ -404,17 +418,17 @@ const Sidebar = ({
       id: "chat",
       name: "Chat Creation",
       icon: Bot,
-      color: "from-red-600 to-red-800",
-      bgColor: "bg-red-600/10",
-      borderColor: "border-red-600/20",
+      color: "from-[var(--primary)] to-emerald-400",
+      bgColor: "bg-[var(--primary)]/10",
+      borderColor: "border-[var(--primary)]/20",
     },
     {
       id: "image",
       name: "Image Creation",
       icon: Image,
-      color: "from-red-700 to-red-900",
-      bgColor: "bg-red-700/10",
-      borderColor: "border-red-700/20",
+      color: "from-purple-500 to-indigo-500",
+      bgColor: "bg-purple-500/10",
+      borderColor: "border-purple-500/20",
     },
     {
       id: "video",
@@ -436,7 +450,7 @@ const Sidebar = ({
       id: "avatarVideo",
       name: "Video Creation with Avatars",
       icon: Film,
-      color: "from-orange-500 to-red-500",
+      color: "from-orange-500 to-amber-500",
       bgColor: "bg-orange-500/10",
       borderColor: "border-orange-500/20",
     },
@@ -496,6 +510,7 @@ const Sidebar = ({
       ).getTime(),
       createdAt: serverChat.createdAt,
       messages: [],
+      toolId: toolId
     }));
 
     return mapped;
@@ -556,48 +571,38 @@ const Sidebar = ({
       animate={{ width: isCollapsed ? 64 : 256 }}
       transition={{ type: "spring", stiffness: 260, damping: 26 }}
       style={{ width: "var(--sidebar-w, 16rem)" }}
-      className={`${
-        isDark ? "bg-black" : "bg-red-900/20"
-      } border-r border-gray-800/50 flex flex-col sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto themed-scrollbar`}
+      className={`border-r border-white/5 flex flex-col fixed top-[72px] left-0 bottom-0 overflow-y-auto custom-scrollbar bg-noir-900 z-40`}
     >
-      {/* Header removed per request */}
+      <SearchChatModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        chats={allServerChatsForDisplay}
+        onChatSelect={(chat) => {
+          // Find which tool this chat belongs to
+          const tool = tools.find(t => t.id === chat.toolId) ||
+            // Auto-detect tool from ID or metadata if possible, for now default to chat
+            tools[0];
 
-      {/* Collapsed top expand button */}
-      {isCollapsed && (
-        <div className="p-3 sticky top-0 z-20 bg-black border-b border-red-600/40">
-          <button
-            onClick={() => {
-              const next = !isCollapsed;
-              setIsCollapsed(next);
-              try {
-                safeLocalStorage.setItem("sidebarCollapsed", String(next));
-              } catch (_) {}
-            }}
-            className="ui-icon-btn"
-            title="Expand sidebar"
-            aria-label="Expand sidebar"
-          >
-            <PanelLeftClose className="w-4 h-4 rotate-180" />
-          </button>
-        </div>
-      )}
+          if (chat.toolId && onChatSelect) {
+            onChatSelect(chat.toolId, chat.id);
+          } else if (onChatSelect) {
+            onChatSelect(tool.id, chat.id);
+          }
+        }}
+      />
+
+      {/* Search Modal Integration Logic needs to map toolId correctly. */}
+      {/* Let's fix lines 548-552 above first in a subsequent edit or do it now. */}
+      {/* Actually I'll do it right here in the replacement. */}
 
       {/* Essentials (sticky) */}
       {!isCollapsed && (
-        <div className="px-3 md:px-4 py-1 sticky top-0 z-20 bg-black border-b border-red-600/40">
-          <div className="flex items-center justify-end mb-2">
-            <button
-              onClick={() => setIsCollapsed(true)}
-              className="ui-icon-btn"
-              title="Collapse sidebar"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="px-3 md:px-4 py-4 sticky top-0 z-20 bg-noir-900 border-b border-white/5">
           <div className="space-y-1">
+
             <button
               onClick={() => onCreateNewChat("chat")}
-              className="ui-row"
+              className="ui-row-strong"
               title="New chat"
             >
               <Plus className="w-4 h-4" /> New chat
@@ -646,19 +651,7 @@ const Sidebar = ({
             <button onClick={() => onToolSelect("currency")} className="ui-row">
               <DollarSign className="w-4 h-4" /> Currency
             </button>
-            <button
-              onClick={() => {
-                try {
-                  (window.__toast?.push || (() => {}))({
-                    message: "Press Ctrl/Cmd+K to search chats",
-                    type: "info",
-                  });
-                } catch (_) {}
-              }}
-              className="ui-row"
-            >
-              <Search className="w-4 h-4" /> Search chats
-            </button>
+
           </div>
         </div>
       )}
@@ -746,30 +739,62 @@ const Sidebar = ({
         </div>
       </div>
 
-      {/* Footer profile (minimal) */}
-      <div className="px-3 md:px-4 py-3 border-t border-gray-800/50 mt-auto">
-        <div className="w-full flex items-center justify-between">
-          <div className="min-w-0">
-            <p className="text-sm text-white truncate">
-              {user?.firstName || user?.email?.split("@")[0] || "User"}
-            </p>
-            <p className="text-xs text-gray-400 truncate">
-              {subscriptionStatus === "active"
-                ? "Pro Plan"
-                : subscriptionStatus === "trial"
-                  ? "Trial"
-                  : "Free"}
-            </p>
-          </div>
+      {/* Footer profile */}
+      <div className="px-3 md:px-4 py-3 border-t border-gray-800/50 mt-auto relative">
+        <ProfileDropdown
+          isOpen={showProfileMenu}
+          onClose={() => setShowProfileMenu(false)}
+          user={user}
+          onLogout={onLogout}
+          onSettingsClick={onSettingsClick}
+          positionClass={`bottom-full left-3 mb-2 w-64 ${isCollapsed ? 'left-16 bottom-4' : ''}`}
+        />
+
+        <div className="mb-3 flex justify-end">
           <button
-            onClick={handleSubscribe}
-            id="subscribe-btn"
-            className="ui-icon-btn"
-            title="Manage plan"
+            onClick={() => {
+              const next = !isCollapsed;
+              setIsCollapsed(next);
+              try {
+                safeLocalStorage.setItem("sidebarCollapsed", String(next));
+              } catch (_) { }
+            }}
+            className="p-2 text-white/40 hover:text-white transition-colors"
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <Crown className="w-4 h-4" />
+            <PanelLeftClose className={`w-4 h-4 ${isCollapsed ? 'rotate-180' : ''}`} />
           </button>
         </div>
+
+        <button
+          onClick={() => setShowProfileMenu(!showProfileMenu)}
+          className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all duration-200 hover:bg-white/5 border border-transparent hover:border-white/5 group text-left ${showProfileMenu ? 'bg-white/5 border-white/5' : ''}`}
+        >
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[var(--primary)] to-emerald-400 p-[1px] shrink-0">
+            <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
+              {user?.avatar ? (
+                <img src={user.avatar} alt="User" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-5 h-5 text-[var(--primary)]" />
+              )}
+            </div>
+          </div>
+
+          {!isCollapsed && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate group-hover:text-[var(--primary)] transition-colors">
+                {user?.firstName || user?.username || "User"}
+              </p>
+              <p className="text-xs text-gray-400 capitalize">
+                {subscriptionStatus === 'active' ? 'Pro Plan' : subscriptionStatus}
+              </p>
+            </div>
+          )}
+
+          {!isCollapsed && (
+            <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${showProfileMenu ? '-rotate-90' : 'rotate-90'}`} />
+          )}
+        </button>
       </div>
     </motion.div>
   );

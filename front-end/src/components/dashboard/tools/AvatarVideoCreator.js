@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import FormattedMessage from '../ui/FormattedMessage';
 import { motion } from 'framer-motion';
 import safeLocalStorage from '../../../utils/localStorage';
-import { 
-  Send, 
-  Download, 
-  RefreshCw, 
+import {
+  Send,
+  Download,
+  RefreshCw,
   Film,
   User,
   Play,
@@ -132,19 +132,19 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
 
       // Use existing chat or create new one only if no chat exists
       let serverChatId = currentChat?.serverId || currentChat?._id;
-      
+
       // Only create new chat if no chat exists at all
       if (!serverChatId) {
         try {
           console.log('Creating new backend chat for avatar video generation');
-          
+
           const createResponse = await fetch(`${apiBase}/api/chat`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
               chatType: 'avatarVideo'
             })
@@ -154,12 +154,12 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
             const chatData = await createResponse.json();
             serverChatId = chatData.data._id;
             console.log('Created new backend chat:', serverChatId);
-            
+
             // Update the current chat with the server ID
             if (onChatUpdate) {
-              onChatUpdate({ 
+              onChatUpdate({
                 id: currentChat?.id || Date.now().toString(),
-                serverId: serverChatId, 
+                serverId: serverChatId,
                 title: chatData.data.title || prompt.slice(0, 50) + (prompt.length > 50 ? '...' : '')
               });
             }
@@ -172,18 +172,18 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
       } else {
         console.log('Using existing chat ID:', serverChatId);
       }
-      
+
       // Save to server chat if we have a server chat ID
       if (serverChatId) {
         try {
           console.log('Saving avatar video generation to server chat:', serverChatId);
-          
+
           // Send the prompt and video URL to the server chat
           const chatPayload = {
             message: `Avatar video generation: ${prompt}`,
             stream: false
           };
-          
+
           const chatRes = await fetch(`${apiBase}/api/chat/${serverChatId}/message`, {
             method: 'POST',
             headers: {
@@ -192,7 +192,7 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
             },
             body: JSON.stringify(chatPayload)
           });
-          
+
           if (chatRes.ok) {
             console.log('Successfully saved to server chat');
           } else {
@@ -215,10 +215,10 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
 
     } catch (error) {
       console.error('Error generating avatar video:', error);
-      
+
       // Better error message handling
       let errorMessage = 'Unknown error occurred';
-      
+
       if (error?.message) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
@@ -230,8 +230,8 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
           errorMessage = String(error);
         }
       }
-      
-      try { (window.__toast?.push || (()=>{}))({ message: `Error generating avatar video: ${errorMessage}`, type: 'error' }); } catch(_) {}
+
+      try { (window.__toast?.push || (() => { }))({ message: `Error generating avatar video: ${errorMessage}`, type: 'error' }); } catch (_) { }
     } finally {
       setIsGenerating(false);
     }
@@ -266,34 +266,29 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
     }
   };
 
+
+
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-800/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-orange-500 to-red-500">
-              <Film className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Avatar Video Creator</h1>
-              <p className="text-gray-400">Create engaging videos with AI avatars</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-            >
-              <Settings className="w-5 h-5 text-gray-400" />
-            </button>
-            <button
-              onClick={handleNewChat}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 transition-all"
-            >
-              New Chat
-            </button>
-          </div>
+      {/* Header removed for cleaner UI */}
+      <div className="p-4 border-b border-white/5 flex items-center justify-between">
+        <h3 className="text-lg font-medium text-white flex items-center gap-2">
+          <Film className="w-5 h-5 text-gray-400" />
+          Avatar Video Creator
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleNewChat}
+            className="px-4 py-2 rounded-xl bg-white text-black hover:bg-gray-200 text-sm font-medium transition-colors"
+          >
+            New Chat
+          </button>
         </div>
       </div>
 
@@ -395,8 +390,8 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
               <div className="grid grid-cols-4 gap-3">
                 {Array.from({ length: parseInt(settings.avatarCount) }, (_, i) => (
                   <div key={i} className="text-center">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-orange-500/20 to-red-500/20 mx-auto mb-2 flex items-center justify-center">
-                      <User className="w-8 h-8 text-orange-400" />
+                    <div className="w-16 h-16 rounded-full bg-[var(--primary)]/20 mx-auto mb-2 flex items-center justify-center">
+                      <User className="w-8 h-8 text-[var(--primary)]" />
                     </div>
                     <p className="text-xs text-gray-400">Avatar {i + 1}</p>
                   </div>
@@ -417,11 +412,10 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
               <div className="space-y-4">
                 {messages.map((message, index) => (
                   <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-2xl p-4 rounded-2xl ${
-                      message.type === 'user' 
-                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' 
-                        : 'bg-gray-800/50 text-gray-200'
-                    }`}>
+                    <div className={`max-w-2xl p-4 rounded-2xl ${message.type === 'user'
+                      ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                      : 'bg-gray-800/50 text-gray-200'
+                      }`}>
                       {message.type === 'user' ? (
                         <p>{message.content}</p>
                       ) : (
@@ -429,8 +423,8 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
                       )}
                       {message.video && (
                         <div className="mt-3">
-                          <video 
-                            src={message.video} 
+                          <video
+                            src={message.video}
                             controls
                             className="rounded-lg max-w-full h-auto"
                           />
@@ -443,8 +437,8 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
             ) : (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
-                  <div className="p-4 rounded-full bg-gradient-to-r from-orange-500/20 to-red-500/20 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                    <Sparkles className="w-10 h-10 text-orange-400" />
+                  <div className="p-4 rounded-full bg-[var(--primary)]/20 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                    <Sparkles className="w-10 h-10 text-[var(--primary)]" />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-2">Create Avatar Videos</h3>
                   <p className="text-gray-400 max-w-md">
@@ -464,13 +458,13 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="Describe the video content for your avatar..."
-                  className="w-full p-4 pr-12 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20"
+                  className="w-full p-4 pr-12 rounded-xl bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-[var(--primary)]/50 focus:ring-2 focus:ring-[var(--primary)]/20"
                   onKeyPress={(e) => e.key === 'Enter' && handleGenerate()}
                 />
                 <button
                   onClick={handleGenerate}
                   disabled={!prompt.trim() || isGenerating}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-[var(--primary)] text-black hover:bg-[var(--primary)]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {isGenerating ? (
                     <RefreshCw className="w-5 h-5 animate-spin" />
@@ -494,9 +488,9 @@ const AvatarVideoCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-white mb-2">Generated Avatar Video</h3>
               <div className="relative">
-                <video 
+                <video
                   ref={videoRef}
-                  src={generatedVideo} 
+                  src={generatedVideo}
                   className="w-full rounded-lg shadow-lg"
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}

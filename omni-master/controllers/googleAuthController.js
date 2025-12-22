@@ -31,7 +31,12 @@ function getOAuthClient(req) {
 const getAuthUrl = async (req, res) => {
   try {
     const oauth2Client = getOAuthClient(req);
-    const scopes = (process.env.GOOGLE_SCOPES || 'openid email profile').split(/[,\s]+/).filter(Boolean);
+
+    // Default full scopes including YouTube
+    const scopes = (process.env.GOOGLE_SCOPES ||
+      'openid email profile https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube'
+    ).split(/[,\s]+/).filter(Boolean);
+
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
@@ -59,7 +64,7 @@ const handleCallback = async (req, res) => {
 
     // Upsert user by googleId or email
     const email = profile.email?.toLowerCase();
-    let user = await User.findOne({ $or: [ { googleId: profile.id }, { email } ] }).select('+googleAccessToken +googleRefreshToken');
+    let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] }).select('+googleAccessToken +googleRefreshToken');
     if (!user) {
       // Create basic user; password not required for OAuth users, set random hash placeholder
       const randomPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -74,7 +79,7 @@ const handleCallback = async (req, res) => {
 
     user.googleId = profile.id;
     user.googleEmail = email || user.googleEmail;
-    user.googleScopes = Array.from(new Set([ ...(user.googleScopes || []), ...(((tokens.scope || '').split(' ')).filter(Boolean)) ]));
+    user.googleScopes = Array.from(new Set([...(user.googleScopes || []), ...(((tokens.scope || '').split(' ')).filter(Boolean))]));
     await user.updateGoogleTokens(tokens);
 
     // Issue a JWT via existing logic

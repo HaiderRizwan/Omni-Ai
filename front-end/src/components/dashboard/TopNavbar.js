@@ -48,14 +48,14 @@ const TopNavbar = ({ user, onLogout, onSettingsClick }) => {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur">
+    <header className="fixed top-0 left-0 right-0 z-[100] border-b border-white/5 bg-noir-900/80 backdrop-blur-md">
       <div className="mx-auto max-w-full px-6 py-4">
         <div className="flex items-center justify-between">
           {/* Left Section - Logo */}
           <div className="flex items-center gap-3">
-            <img src="/omnilogo.png" alt="Omni Ai" className="h-10 w-10 rounded-sm object-contain" />
-            <span className="text-3xl font-bold bg-gradient-to-r from-red-500 via-rose-300 to-white bg-clip-text text-transparent">
-              Omni Ai
+            <img src="/omnilogo.png" alt="Omni Ai" className="h-9 w-9 object-contain" />
+            <span className="text-2xl font-bold font-heading tracking-tighter text-white">
+              Omni<span className="text-[var(--primary)]">.ai</span>
             </span>
           </div>
 
@@ -64,7 +64,7 @@ const TopNavbar = ({ user, onLogout, onSettingsClick }) => {
             {/* Filter Icon */}
             <button
               onClick={handleFilter}
-              className="relative rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+              className="relative rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
             >
               <Filter size={20} />
             </button>
@@ -72,11 +72,11 @@ const TopNavbar = ({ user, onLogout, onSettingsClick }) => {
             {/* Bell Icon */}
             <button
               onClick={handleBell}
-              className="relative rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+              className="relative rounded-lg p-2 text-white/60 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
             >
               <Bell size={20} />
               {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-xs text-white rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-[var(--primary)] text-xs text-white rounded-full flex items-center justify-center">
                   {notifications.length}
                 </span>
               )}
@@ -86,13 +86,13 @@ const TopNavbar = ({ user, onLogout, onSettingsClick }) => {
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center gap-2 rounded-lg p-1 text-white/60 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-0 focus:ring-2 focus:ring-red-500/50"
+                className="flex items-center gap-2 rounded-lg p-1 text-white/60 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-0 focus:ring-2 focus:ring-[var(--primary)]/50"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-red-500 to-rose-500 flex items-center justify-center overflow-hidden">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[var(--primary)] to-emerald-500 flex items-center justify-center overflow-hidden">
                   {user?.avatar ? (
-                    <img 
-                      src={user.avatar} 
-                      alt="User Avatar" 
+                    <img
+                      src={user.avatar}
+                      alt="User Avatar"
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -102,7 +102,7 @@ const TopNavbar = ({ user, onLogout, onSettingsClick }) => {
               </button>
 
               {/* User Dropdown Menu */}
-              <ProfileDropdown 
+              <ProfileDropdown
                 user={user}
                 onLogout={onLogout}
                 onSettingsClick={onSettingsClick}

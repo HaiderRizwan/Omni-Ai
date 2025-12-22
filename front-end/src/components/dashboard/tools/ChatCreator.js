@@ -34,7 +34,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
   useEffect(() => {
     // Update local serverId reference when currentChat changes
     currentServerChatId.current = currentChat?.serverId || currentChat?._id || null;
-    
+
     const transform = (arr) => (arr || []).map((m, idx) => {
       const base = {
         id: m.id || m._id || idx + 1,
@@ -112,8 +112,8 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
       let serverChatId = currentServerChatId.current || currentChat?.serverId || currentChat?._id || null;
       const shouldDeriveTitle = !currentChat?.title || /^New\b/i.test(currentChat.title);
       const derivedTitle = generateTitleFromText(userMessage.content);
-      
-      
+
+
       if (!serverChatId) {
         const createResponse = await fetch(`${apiBase}/api/chat`, {
           method: 'POST',
@@ -121,7 +121,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             title: derivedTitle || 'New Chat',
             chatType: 'text' // Default to text chat
           })
@@ -134,15 +134,15 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
 
         const chatData = await createResponse.json();
         serverChatId = chatData.data._id;
-        
+
         // Store serverId in local reference for immediate use
         currentServerChatId.current = serverChatId;
-        
+
         // Update the current chat with the server ID so future messages use the same chat
-        onChatUpdate?.({ 
+        onChatUpdate?.({
           id: currentChat?.id || Date.now().toString(), // Keep local ID
-          serverId: serverChatId, 
-          title: chatData.data.title || derivedTitle || 'New Chat', 
+          serverId: serverChatId,
+          title: chatData.data.title || derivedTitle || 'New Chat',
           messages: currentChat?.messages || []
         });
       } else if (shouldDeriveTitle) {
@@ -160,7 +160,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
               },
               body: JSON.stringify({ title: newTitle })
             });
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
@@ -180,7 +180,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
           messageContent += `\n\nDocument content:\n${attachmentText}`;
         }
       }
-      
+
       const payload = {
         message: messageContent,
         stream: false
@@ -200,14 +200,14 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
       }
 
       const messageData = await messageResponse.json();
-      
+
       let assistantMessage = {
         id: Date.now() + 1,
         role: 'assistant',
         content: messageData.data?.message || 'Sorry, I couldn\'t process your request.',
         timestamp: new Date()
       };
-      
+
       // Check if response has an image property
       if (messageData.data?.image) {
         assistantMessage.image = messageData.data.image;
@@ -222,7 +222,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
           assistantMessage = { ...assistantMessage, image: urlMatch[0], content: '' };
         }
       }
-      
+
       console.log('Final assistant message:', assistantMessage);
 
       // Handle updated chat information from server (like title updates)
@@ -231,12 +231,12 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
         serverId: serverChatId,
         messages: [...(currentChat?.messages || []), userMessage, assistantMessage]
       };
-      
+
       // Include updated title if provided by server
       if (messageData.data?.chat?.title) {
         updatedChatData.title = messageData.data.chat.title;
       }
-      
+
       // Update parent state first, then let useEffect sync the local messages
       onChatUpdate?.(updatedChatData);
 
@@ -248,14 +248,14 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
         content: `Error: ${error.message}`,
         timestamp: new Date()
       };
-      
+
       // Update parent state with error message
       const updatedChatData = {
         id: currentChat?.id || currentServerChatId.current,
         serverId: currentServerChatId.current,
         messages: [...(currentChat?.messages || []), userMessage, errorMessage]
       };
-      
+
       onChatUpdate?.(updatedChatData);
     } finally {
       setIsLoading(false);
@@ -287,8 +287,8 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
   const copyMessageToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text || '');
-      try { (window.__toast?.push || (()=>{}))({ message: 'Copied to clipboard', type: 'success' }); } catch(_) {}
-    } catch (_) {}
+      try { (window.__toast?.push || (() => { }))({ message: 'Copied to clipboard', type: 'success' }); } catch (_) { }
+    } catch (_) { }
   };
 
   const regenerateFromLastUser = () => {
@@ -312,39 +312,38 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             className={`group flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             {message.role === 'assistant' && (
-              <div className="p-2 rounded-lg bg-gradient-to-r from-red-600 to-red-800">
+              <div className="p-2 rounded-lg bg-white/10">
                 <Bot className="w-5 h-5 text-white" />
               </div>
             )}
-            
-            <div className={`relative max-w-[70%] p-4 rounded-2xl ${
-              message.role === 'user' 
-                ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' 
-                : 'bg-white/5 border border-white/10 text-gray-100'
-            }`}>
+
+            <div className={`relative max-w-[70%] p-4 rounded-2xl ${message.role === 'user'
+              ? 'bg-[var(--primary)] text-black'
+              : 'bg-white/5 border border-white/10 text-gray-100'
+              }`}>
               {message.role === 'assistant' ? (
                 message.image ? (
                   <div>
                     <div className="text-sm leading-relaxed mb-3">
                       <FormattedMessage text={message.content} />
                     </div>
-                    <img 
-                      src={message.image} 
-                      alt="Generated" 
+                    <img
+                      src={message.image}
+                      alt="Generated"
                       className="rounded-lg max-w-full h-auto"
                       onLoad={() => console.log('✅ Image loaded successfully:', message.image)}
                       onError={(e) => {
                         console.error('❌ Image failed to load:', message.image);
                         console.error('Error event:', e);
                         console.error('Target src:', e.target.src);
-                        
+
                         // Ensure we have a full URL
-                        const fullImageUrl = message.image.startsWith('http') 
-                          ? message.image 
+                        const fullImageUrl = message.image.startsWith('http')
+                          ? message.image
                           : `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}${message.image}`;
-                        
+
                         console.log('🔧 Constructed full URL:', fullImageUrl);
-                        
+
                         // Try to load as blob URL to bypass CORS
                         fetch(fullImageUrl)
                           .then(response => {
@@ -360,7 +359,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
                               size: blob.size,
                               type: blob.type
                             });
-                            
+
                             // Create object URL and set as src
                             const objectUrl = URL.createObjectURL(blob);
                             console.log('🔗 Created object URL:', objectUrl);
@@ -382,9 +381,8 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
                   {message.content}
                 </p>
               )}
-              <p className={`text-xs mt-2 ${
-                message.role === 'user' ? 'text-red-100' : 'text-gray-400'
-              }`}>
+              <p className={`text-xs mt-2 ${message.role === 'user' ? 'text-black/60' : 'text-gray-400'
+                }`}>
                 {message.timestamp.toLocaleTimeString()}
               </p>
 
@@ -411,20 +409,20 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             </div>
 
             {message.role === 'user' && (
-              <div className="p-2 rounded-lg bg-gradient-to-r from-red-500 to-rose-500">
-                <User className="w-5 h-5 text-white" />
+              <div className="p-2 rounded-lg bg-white text-black">
+                <User className="w-5 h-5" />
               </div>
             )}
           </motion.div>
         ))}
-        
+
         {isLoading && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex gap-3 justify-start"
           >
-            <div className="p-2 rounded-lg bg-gradient-to-r from-red-600 to-red-800">
+            <div className="p-2 rounded-lg bg-white/10">
               <Bot className="w-5 h-5 text-white" />
             </div>
             <div className="ui-card px-4 py-3">
@@ -439,29 +437,27 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             </div>
           </motion.div>
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 
       {/* Debug Box */}
       {debugInfo && (
         <div className="fixed bottom-32 right-0 z-30 p-4" style={{ left: 'var(--sidebar-w, 16rem)' }}>
-          <div className={`p-4 rounded-lg border text-sm max-w-md ${
-            debugInfo.status === 'converted' 
-              ? 'bg-green-900/20 border-green-500/50 text-green-300'
-              : debugInfo.status === 'conversion_failed'
-              ? 'bg-red-900/20 border-red-500/50 text-red-300'
+          <div className={`p-4 rounded-lg border text-sm max-w-md ${debugInfo.status === 'converted'
+            ? 'bg-green-900/20 border-green-500/50 text-green-300'
+            : debugInfo.status === 'conversion_failed'
+              ? 'bg-[var(--primary)]/20 border-[var(--primary)]/50 text-[var(--primary)]'
               : debugInfo.status === 'uploading'
-              ? 'bg-blue-900/20 border-blue-500/50 text-blue-300'
-              : 'bg-yellow-900/20 border-yellow-500/50 text-yellow-300'
-          }`}>
+                ? 'bg-blue-900/20 border-blue-500/50 text-blue-300'
+                : 'bg-yellow-900/20 border-yellow-500/50 text-yellow-300'
+            }`}>
             <div className="flex items-start gap-3">
-              <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                debugInfo.status === 'converted' ? 'bg-green-500'
-                : debugInfo.status === 'conversion_failed' ? 'bg-red-500'
-                : debugInfo.status === 'uploading' ? 'bg-blue-500 animate-pulse'
-                : 'bg-yellow-500'
-              }`}></div>
+              <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${debugInfo.status === 'converted' ? 'bg-green-500'
+                : debugInfo.status === 'conversion_failed' ? 'bg-[var(--primary)]'
+                  : debugInfo.status === 'uploading' ? 'bg-blue-500 animate-pulse'
+                    : 'bg-yellow-500'
+                }`}></div>
               <div className="flex-1">
                 <div className="font-medium mb-1">Debug Information:</div>
                 <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed">
@@ -474,11 +470,11 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
       )}
 
       {/* Composer */}
-      <div className="p-6 border-t border-gray-800/50 shrink-0 fixed bottom-0 right-0 z-40 bg-[#0b0b0f]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0b0b0f]/70" style={{ left: 'var(--sidebar-w, 16rem)' }}>
+      <div className="p-6 border-t border-white/5 shrink-0 fixed bottom-0 right-0 z-40 bg-noir-900/90 backdrop-blur-xl" style={{ left: 'var(--sidebar-w, 16rem)' }}>
         {/* Quick prompts */}
         <div className="flex flex-wrap gap-2 mb-3">
           {quickPrompts.map((p, i) => (
-            <button key={i} className="ui-btn text-sm" onClick={() => setInputMessage(p)} title="Insert prompt">
+            <button key={i} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors" onClick={() => setInputMessage(p)} title="Insert prompt">
               {p}
             </button>
           ))}
@@ -495,12 +491,12 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
                 if (file) {
                   setPendingAttachment(file);
                   setDebugInfo({ status: 'uploading', message: 'Uploading file...' });
-                  
+
                   // Upload and convert immediately
                   try {
                     const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
                     const token = safeLocalStorage.getItem('token');
-                    
+
                     if (!token) {
                       setDebugInfo({ status: 'conversion_failed', message: '❌ Please log in to upload files' });
                       return;
@@ -509,9 +505,9 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
                     // Use current chat's serverId if available, otherwise skip upload
                     let serverChatId = currentChat?.serverId || currentChat?._id || null;
                     if (!serverChatId) {
-                      setDebugInfo({ 
-                        status: 'conversion_failed', 
-                        message: '❌ Please send a message first to create a chat session before uploading files' 
+                      setDebugInfo({
+                        status: 'conversion_failed',
+                        message: '❌ Please send a message first to create a chat session before uploading files'
                       });
                       setPendingAttachment(null);
                       return;
@@ -527,15 +523,15 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
                         },
                         body: formData
                       });
-                      
+
                       if (uploadRes.ok) {
                         const uploadJson = await uploadRes.json();
                         setAttachmentData(uploadJson.data);
-                        
+
                         // Detailed debug information
                         let debugMessage = '';
                         let debugStatus = uploadJson?.data?.conversionStatus || 'unknown';
-                        
+
                         if (debugStatus === 'converted') {
                           debugMessage = `✅ Document converted successfully\n` +
                             `📄 File: ${uploadJson.data.filename}\n` +
@@ -556,16 +552,16 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
                             `📋 Extension: ${uploadJson.data.filename.split('.').pop()?.toLowerCase()}\n` +
                             `⚠️ Issue: Unsupported format or MIME type mismatch`;
                         }
-                        
-                        setDebugInfo({ 
+
+                        setDebugInfo({
                           status: debugStatus,
                           message: debugMessage
                         });
                       } else {
                         const errorText = await uploadRes.text().catch(() => 'Unknown error');
-                        setDebugInfo({ 
-                          status: 'conversion_failed', 
-                          message: `❌ Upload Failed\n📄 File: ${file.name}\n📊 Size: ${(file.size / 1024).toFixed(1)} KB\n⚠️ Error: ${uploadRes.status} - ${errorText}` 
+                        setDebugInfo({
+                          status: 'conversion_failed',
+                          message: `❌ Upload Failed\n📄 File: ${file.name}\n📊 Size: ${(file.size / 1024).toFixed(1)} KB\n⚠️ Error: ${uploadRes.status} - ${errorText}`
                         });
                       }
                     }
@@ -578,7 +574,7 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="ui-btn"
+              className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
               disabled={isLoading}
               title="Attach a document"
             >
@@ -594,33 +590,33 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
               placeholder="Message Omni…  (Enter to send, Shift+Enter for newline)"
-              className="ui-input p-4 pr-12 resize-none max-h-40"
+              className="w-full p-4 pr-14 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all resize-none max-h-40"
               disabled={isLoading}
             />
-          <button
-            onClick={sendMessage}
+            <button
+              onClick={sendMessage}
               disabled={(!inputMessage.trim() && !pendingAttachment) || isLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
-          </button>
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-[var(--primary)] text-black hover:bg-[var(--primary)]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+            </button>
           </div>
 
           {pendingAttachment && (
-            <div className="flex items-center gap-2 px-3 py-2 ui-card text-sm text-white/80">
+            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg border border-white/10 text-sm text-white/80">
               <span className="max-w-[220px] truncate">{pendingAttachment.name}</span>
               <button
-                onClick={() => { 
-                  setPendingAttachment(null); 
+                onClick={() => {
+                  setPendingAttachment(null);
                   setAttachmentData(null);
                   setDebugInfo(null);
-                  if (fileInputRef.current) fileInputRef.current.value = ''; 
+                  if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
-                className="ui-icon-btn"
+                className="p-1 hover:text-white text-gray-400"
                 title="Remove attachment"
               >
                 <X className="w-4 h-4" />

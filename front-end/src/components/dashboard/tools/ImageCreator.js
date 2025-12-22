@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import FormattedMessage from '../ui/FormattedMessage';
 import { motion } from 'framer-motion';
 import safeLocalStorage from '../../../utils/localStorage';
-import { 
-  Send, 
-  Download, 
-  RefreshCw, 
+import {
+  Send,
+  Download,
+  RefreshCw,
   Sparkles
 } from 'lucide-react';
 
@@ -67,9 +67,9 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setPrompt('');
-    
+
     setIsGenerating(true);
-    
+
     try {
       const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const token = safeLocalStorage.getItem('token');
@@ -81,7 +81,7 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
         try {
           const created = await onNewChat('image');
           ensuredChat = created || ensuredChat;
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // Use chat command system instead of direct API call (like AvatarCreator)
@@ -92,19 +92,19 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
 
       // Use existing chat or create new one only if no chat exists
       let serverChatId = ensuredChat?.serverId || ensuredChat?._id || currentChat?.serverId || currentChat?._id;
-      
+
       // Only create new chat if no chat exists at all
       if (!serverChatId) {
         try {
           console.log('Creating new backend chat for image generation');
-          
+
           const createResponse = await fetch(`${apiBase}/api/chat`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
               chatType: 'image'
             })
@@ -114,12 +114,12 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
             const chatData = await createResponse.json();
             serverChatId = chatData.data._id;
             console.log('Created new backend chat:', serverChatId);
-            
+
             // Update the current chat with the server ID
             if (onChatUpdate) {
-              onChatUpdate({ 
+              onChatUpdate({
                 id: ensuredChat?.id || currentChat?.id || Date.now().toString(),
-                serverId: serverChatId, 
+                serverId: serverChatId,
                 title: chatData.data.title || prompt.slice(0, 50) + (prompt.length > 50 ? '...' : '')
               });
             }
@@ -132,7 +132,7 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
       } else {
         console.log('Using existing chat ID:', serverChatId);
       }
-      
+
       // Append placeholder BEFORE sending to server so UI updates instantly
       setMessages(prev => ([
         ...prev,
@@ -153,14 +153,14 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
       if (serverChatId) {
         try {
           console.log('Saving image generation to server chat:', serverChatId);
-          
+
           // Send the image command to the server chat with character settings
           const chatPayload = {
             message: `/image ${prompt}`,
             stream: false,
             imageSettings: settings
           };
-          
+
           const chatRes = await fetch(`${apiBase}/api/chat/${serverChatId}/message`, {
             method: 'POST',
             headers: {
@@ -169,19 +169,19 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
             },
             body: JSON.stringify(chatPayload)
           });
-          
+
           if (chatRes.ok) {
             const chatData = await chatRes.json();
             console.log('Chat response received:', chatData);
-            
+
             // Check if the response contains image data
             if (chatData.data && chatData.data.image) {
               const imageUrl = chatData.data.image;
               const imageId = chatData.data.imageId;
-              
+
               console.log('🎨 Image received from chat response:', imageUrl);
               console.log('🖼️ Image ID received from chat response:', imageId);
-              
+
               // Replace the placeholder with the real assistant image message (local)
               setMessages(prev => {
                 const withoutPlaceholder = [...prev];
@@ -199,79 +199,79 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
               });
 
               // Update chat history with both user and assistant messages (parent)
-      if (onChatUpdate) {
+              if (onChatUpdate) {
                 const trimmed = (prompt || '').trim();
-        const titleBase = trimmed.slice(0, 50);
-        const title = titleBase && trimmed.length > 50 ? `${titleBase}...` : titleBase || (currentChat?.title || 'Image Generation');
-        
+                const titleBase = trimmed.slice(0, 50);
+                const title = titleBase && trimmed.length > 50 ? `${titleBase}...` : titleBase || (currentChat?.title || 'Image Generation');
+
                 const newMessages = [
                   ...((ensuredChat?.messages || currentChat?.messages) || []),
                   { type: 'user', content: prompt, timestamp: Date.now() },
-                  { 
-                    type: 'assistant', 
-                    content: `I've generated an image based on your prompt: "${prompt}"`, 
-                    image: imageUrl, 
+                  {
+                    type: 'assistant',
+                    content: `I've generated an image based on your prompt: "${prompt}"`,
+                    image: imageUrl,
                     imageId: imageId,
                     originalPrompt: prompt,
                     technicalPrompt: prompt,
-                    timestamp: Date.now() 
+                    timestamp: Date.now()
                   }
                 ];
-                
+
                 console.log('Updating chat history with image:', newMessages.map(m => ({
-          type: m.type,
-          content: m.content,
-          hasImage: !!m.image,
-          imageUrl: m.image
-        })));
-        
-        onChatUpdate({
-          messages: newMessages,
-          ...(title ? { title } : {})
-        });
-      }
-      // Poll the server chat until an assistant message with image appears
-      if (serverChatId) {
-        let attempts = 0;
-        if (pollingRef.current) clearInterval(pollingRef.current);
-        pollingRef.current = setInterval(async () => {
-          if (!isMountedRef.current || attempts++ > 15) {
-            clearInterval(pollingRef.current);
-            return;
-          }
-          try {
-            const token2 = safeLocalStorage.getItem('token');
-            const res = await fetch(`${apiBase}/api/chat/${serverChatId}`, {
-              headers: { 'Authorization': `Bearer ${token2}` }
-            });
-            if (!res.ok) return;
-            const json = await res.json();
-            const serverChat = json?.data;
-            if (!serverChat) return;
-            const mappedMessages = (serverChat.messages || []).map(m => ({
-              type: m.role === 'user' ? 'user' : 'assistant',
-              content: m.content,
-              image: m.image,
-              timestamp: new Date(m.timestamp || serverChat.createdAt || Date.now())
-            }));
-            const lastAssistant = [...mappedMessages].reverse().find(m => m.type === 'assistant' && (m.image || (typeof m.content === 'string' && m.content.match(/https?:\/\//))));
-            if (lastAssistant && onChatUpdate) {
-              onChatUpdate({ messages: mappedMessages });
-              setMessages(mappedMessages);
-              clearInterval(pollingRef.current);
-            }
-          } catch (e) {
-            console.error('Polling error:', e);
-          }
-        }, 2000);
-      }
+                  type: m.type,
+                  content: m.content,
+                  hasImage: !!m.image,
+                  imageUrl: m.image
+                })));
+
+                onChatUpdate({
+                  messages: newMessages,
+                  ...(title ? { title } : {})
+                });
+              }
+              // Poll the server chat until an assistant message with image appears
+              if (serverChatId) {
+                let attempts = 0;
+                if (pollingRef.current) clearInterval(pollingRef.current);
+                pollingRef.current = setInterval(async () => {
+                  if (!isMountedRef.current || attempts++ > 15) {
+                    clearInterval(pollingRef.current);
+                    return;
+                  }
+                  try {
+                    const token2 = safeLocalStorage.getItem('token');
+                    const res = await fetch(`${apiBase}/api/chat/${serverChatId}`, {
+                      headers: { 'Authorization': `Bearer ${token2}` }
+                    });
+                    if (!res.ok) return;
+                    const json = await res.json();
+                    const serverChat = json?.data;
+                    if (!serverChat) return;
+                    const mappedMessages = (serverChat.messages || []).map(m => ({
+                      type: m.role === 'user' ? 'user' : 'assistant',
+                      content: m.content,
+                      image: m.image,
+                      timestamp: new Date(m.timestamp || serverChat.createdAt || Date.now())
+                    }));
+                    const lastAssistant = [...mappedMessages].reverse().find(m => m.type === 'assistant' && (m.image || (typeof m.content === 'string' && m.content.match(/https?:\/\//))));
+                    if (lastAssistant && onChatUpdate) {
+                      onChatUpdate({ messages: mappedMessages });
+                      setMessages(mappedMessages);
+                      clearInterval(pollingRef.current);
+                    }
+                  } catch (e) {
+                    console.error('Polling error:', e);
+                  }
+                }, 2000);
+              }
             } else {
               console.log('No image data in chat response, waiting for completion...');
             }
           } else {
             console.error('Failed to save to server chat:', chatRes.status);
           }
-    } catch (error) {
+        } catch (error) {
           console.error('Error saving to server chat:', error);
         }
       }
@@ -280,10 +280,10 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
 
     } catch (error) {
       console.error('Error generating image:', error);
-      
+
       // Better error message handling
       let errorMessage = 'Unknown error occurred';
-      
+
       if (error?.message) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
@@ -295,8 +295,8 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
           errorMessage = String(error);
         }
       }
-      
-      try { (window.__toast?.push || (()=>{}))({ message: `Error generating image: ${errorMessage}`, type: 'error' }); } catch(_) {}
+
+      try { (window.__toast?.push || (() => { }))({ message: `Error generating image: ${errorMessage}`, type: 'error' }); } catch (_) { }
     } finally {
       setIsGenerating(false);
     }
@@ -377,11 +377,10 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
               <div className="space-y-4">
                 {messages.map((message, index) => (
                   <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`relative max-w-2xl p-4 rounded-2xl ${
-                      message.type === 'user' 
-                        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' 
-                        : 'bg-white/5 border border-white/10 text-gray-200'
-                    }`}>
+                    <div className={`relative max-w-2xl p-4 rounded-2xl ${message.type === 'user'
+                      ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                      : 'bg-white/5 border border-white/10 text-gray-200'
+                      }`}>
                       {message.type === 'user' ? (
                         <p>{message.content}</p>
                       ) : (
@@ -390,56 +389,56 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
                       {message.image && (
                         <div className="mt-3">
                           <div className="relative group">
-                          <img 
-                            src={message.image} 
-                            alt="Generated Image" 
-                            className="rounded-lg max-w-full h-auto"
-                            onLoad={() => console.log('✅ Image loaded successfully:', message.image)}
-                            onError={(e) => {
+                            <img
+                              src={message.image}
+                              alt="Generated Image"
+                              className="rounded-lg max-w-full h-auto"
+                              onLoad={() => console.log('✅ Image loaded successfully:', message.image)}
+                              onError={(e) => {
                                 console.error('❌ Image failed to load:', message.image);
-                              
-                              // Ensure we have a full URL
-                              const fullImageUrl = message.image.startsWith('http') 
-                                ? message.image 
-                                : `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}${message.image}`;
-                              
-                              console.log('🔧 Constructed full URL:', fullImageUrl);
-                              
-                              // Try to load as blob URL to bypass CORS
-                              fetch(fullImageUrl)
-                                .then(response => {
-                                  console.log('🔍 Direct fetch test for image:', {
-                                    status: response.status,
-                                    statusText: response.statusText,
-                                    url: response.url
+
+                                // Ensure we have a full URL
+                                const fullImageUrl = message.image.startsWith('http')
+                                  ? message.image
+                                  : `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}${message.image}`;
+
+                                console.log('🔧 Constructed full URL:', fullImageUrl);
+
+                                // Try to load as blob URL to bypass CORS
+                                fetch(fullImageUrl)
+                                  .then(response => {
+                                    console.log('🔍 Direct fetch test for image:', {
+                                      status: response.status,
+                                      statusText: response.statusText,
+                                      url: response.url
+                                    });
+                                    return response.blob();
+                                  })
+                                  .then(blob => {
+                                    console.log('🔍 Image blob received:', {
+                                      size: blob.size,
+                                      type: blob.type
+                                    });
+
+                                    // Create object URL and set as src
+                                    const objectUrl = URL.createObjectURL(blob);
+                                    console.log('🔗 Created object URL:', objectUrl);
+                                    e.target.src = objectUrl;
+                                  })
+                                  .catch(fetchError => {
+                                    console.error('🔍 Direct fetch failed:', fetchError);
                                   });
-                                  return response.blob();
-                                })
-                                .then(blob => {
-                                  console.log('🔍 Image blob received:', {
-                                    size: blob.size,
-                                    type: blob.type
-                                  });
-                                  
-                                  // Create object URL and set as src
-                                  const objectUrl = URL.createObjectURL(blob);
-                                  console.log('🔗 Created object URL:', objectUrl);
-                                  e.target.src = objectUrl;
-                                })
-                                .catch(fetchError => {
-                                  console.error('🔍 Direct fetch failed:', fetchError);
-                                });
-                            }}
-                          />
-                          <div className="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/20 transition flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
-                            <button
-                              onClick={() => handleDownloadUrl(message.image, 'ai-image')}
-                              className="ui-btn"
-                              title="Download"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                          </div>
+                              }}
+                            />
+                            <div className="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/20 transition flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
+                              <button
+                                onClick={() => handleDownloadUrl(message.image, 'ai-image')}
+                                className="ui-btn"
+                                title="Download"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -462,8 +461,8 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
             ) : (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
-                  <div className="p-4 rounded-full bg-gradient-to-r from-red-500/20 to-rose-500/20 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                    <Sparkles className="w-10 h-10 text-red-400" />
+                  <div className="p-4 rounded-full bg-[var(--primary)]/20 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                    <Sparkles className="w-10 h-10 text-[var(--primary)]" />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-2">Create Your Image</h3>
                   <p className="text-gray-400 max-w-md">
@@ -475,12 +474,12 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
           </div>
 
           {/* Input Area */}
-          <div className="p-6 border-t border-gray-800/50">
+          <div className="p-6 border-t border-white/5">
             {/* Inline settings + quick presets */}
-            <div className="ui-card p-3 mb-3 flex flex-wrap gap-3 items-center">
+            <div className="p-4 rounded-xl bg-white/5 border border-white/10 mb-4 flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Style</span>
-                <select value={settings.style} onChange={(e) => setSettings(prev => ({ ...prev, style: e.target.value }))} className="ui-input-sm px-2 py-1">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Style</span>
+                <select value={settings.style} onChange={(e) => setSettings(prev => ({ ...prev, style: e.target.value }))} className="bg-black/20 border border-white/10 rounded-lg text-sm px-3 py-1.5 min-w-[100px] focus:outline-none focus:border-white/20 text-white cursor-pointer hover:bg-black/30 transition-colors">
                   <option value="realistic">Realistic</option>
                   <option value="artistic">Artistic</option>
                   <option value="cartoon">Cartoon</option>
@@ -488,16 +487,16 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Quality</span>
-                <select value={settings.quality} onChange={(e) => setSettings(prev => ({ ...prev, quality: e.target.value }))} className="ui-input-sm px-2 py-1">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Quality</span>
+                <select value={settings.quality} onChange={(e) => setSettings(prev => ({ ...prev, quality: e.target.value }))} className="bg-black/20 border border-white/10 rounded-lg text-sm px-3 py-1.5 min-w-[100px] focus:outline-none focus:border-white/20 text-white cursor-pointer hover:bg-black/30 transition-colors">
                   <option value="standard">Standard</option>
                   <option value="high">High</option>
                   <option value="ultra">Ultra</option>
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Ratio</span>
-                <select value={settings.aspectRatio} onChange={(e) => setSettings(prev => ({ ...prev, aspectRatio: e.target.value }))} className="ui-input-sm px-2 py-1">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Ratio</span>
+                <select value={settings.aspectRatio} onChange={(e) => setSettings(prev => ({ ...prev, aspectRatio: e.target.value }))} className="bg-black/20 border border-white/10 rounded-lg text-sm px-3 py-1.5 min-w-[80px] focus:outline-none focus:border-white/20 text-white cursor-pointer hover:bg-black/30 transition-colors">
                   <option value="1:1">1:1</option>
                   <option value="2:3">2:3</option>
                   <option value="3:2">3:2</option>
@@ -505,16 +504,16 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Model</span>
-                <select value={settings.model} onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))} className="ui-input-sm px-2 py-1">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Model</span>
+                <select value={settings.model} onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))} className="bg-black/20 border border-white/10 rounded-lg text-sm px-3 py-1.5 min-w-[100px] focus:outline-none focus:border-white/20 text-white cursor-pointer hover:bg-black/30 transition-colors">
                   <option value="sdxl">SDXL</option>
                   <option value="controlnet">ControlNet</option>
                 </select>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 mb-3">
+            <div className="flex flex-wrap gap-2 mb-4">
               {['Product photo on white background', 'Cinematic portrait, shallow depth of field', 'Logo concept, minimal, vector', 'Landscape, golden hour, ultra-detailed'].map((p, i) => (
-                <button key={i} className="ui-btn text-xs" onClick={() => setPrompt(p)} title="Insert prompt">
+                <button key={i} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors" onClick={() => setPrompt(p)} title="Insert prompt">
                   {p}
                 </button>
               ))}
@@ -526,7 +525,7 @@ const ImageCreator = ({ currentChat, onChatUpdate, onNewChat }) => {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="Describe the image you want to create... (Enter to generate, Shift+Enter for newline)"
-                  className="ui-input p-4 pr-12 resize-none max-h-40"
+                  className="w-full p-4 pr-14 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all resize-none max-h-40"
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(); } }}
                   onInput={(e) => {
                     const el = e.currentTarget;

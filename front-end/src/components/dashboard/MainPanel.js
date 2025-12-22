@@ -13,16 +13,20 @@ import AvatarGallery from './tools/Avatarsgallery';
 import VideoGallery from './tools/VideoGallery';
 import CurrencyConverter from '../../components/CurrencyConverter';
 import SocialUpload from './tools/SocialUpload';
+import Overview from './Overview';
 
-const MainPanel = ({ 
-  activeTool, 
-  currentChat, 
-  onChatUpdate, 
+const MainPanel = ({
+  activeTool,
+  currentChat,
+  onChatUpdate,
   onNewChat,
   avatarCollection,
-  setAvatarCollection 
+  setAvatarCollection,
+  user,
+  onToolSelect
 }) => {
   const toolComponents = {
+    overview: Overview,
     chat: ChatCreator,
     image: ImageCreator,
     video: VideoCreator,
@@ -39,18 +43,18 @@ const MainPanel = ({
 
   const toolVariants = {
     initial: { opacity: 0, x: 20, scale: 0.95 },
-    animate: { 
-      opacity: 1, 
-      x: 0, 
+    animate: {
+      opacity: 1,
+      x: 0,
       scale: 1,
       transition: {
         duration: 0.4,
         ease: [0.4, 0, 0.2, 1]
       }
     },
-    exit: { 
-      opacity: 0, 
-      x: -20, 
+    exit: {
+      opacity: 0,
+      x: -20,
       scale: 0.95,
       transition: {
         duration: 0.3,
@@ -62,7 +66,7 @@ const MainPanel = ({
   const ActiveComponent = toolComponents[activeTool];
 
   return (
-    <div className="flex-1 bg-[#0b0b0f] relative overflow-hidden min-h-0">
+    <div className="flex-1 bg-noir-900 relative overflow-hidden min-h-0">
       <AnimatePresence mode="wait">
         {ActiveComponent && (
           <motion.div
@@ -77,15 +81,18 @@ const MainPanel = ({
               currentChat={currentChat}
               onChatUpdate={onChatUpdate}
               onNewChat={onNewChat}
-              {...(activeTool === 'avatar' && { avatarCollection, onAddToCollection: (imageData, isAdded) => {
-                // Handle adding to collection from avatar creator
-                if (isAdded) {
-                  setAvatarCollection(prev => [...prev, imageData]);
-                } else {
-                  setAvatarCollection(prev => prev.filter(item => item._id !== imageData._id));
+              {...(activeTool === 'avatar' && {
+                avatarCollection, onAddToCollection: (imageData, isAdded) => {
+                  // Handle adding to collection from avatar creator
+                  if (isAdded) {
+                    setAvatarCollection(prev => [...prev, imageData]);
+                  } else {
+                    setAvatarCollection(prev => prev.filter(item => item._id !== imageData._id));
+                  }
                 }
-              }})}
+              })}
               {...(activeTool === 'video' && { avatars: avatarCollection })}
+              {...(activeTool === 'overview' && { user, onToolSelect })}
             />
           </motion.div>
         )}

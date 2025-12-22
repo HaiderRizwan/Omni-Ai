@@ -91,11 +91,11 @@ const PlanModal = ({ isOpen, onClose, currentPlan, onSelectPlan }) => (
             {plans.map(plan => (
               <div
                 key={plan.id}
-                className={`flex-1 min-w-[180px] max-w-[220px] bg-black/30 rounded-xl border border-white/10 p-6 flex flex-col items-center shadow-lg ${plan.highlight ? 'ring-2 ring-red-500/40' : ''}`}
+                className={`flex-1 min-w-[180px] max-w-[220px] bg-black/30 rounded-xl border border-white/10 p-6 flex flex-col items-center shadow-lg ${plan.highlight ? 'ring-2 ring-[var(--primary)]/40' : ''}`}
                 style={{ flexBasis: '200px' }}
               >
                 <h3 className="text-lg font-semibold text-white mb-2 text-center">{plan.name}</h3>
-                <div className="text-2xl font-bold text-red-400 mb-4">{plan.price}</div>
+                <div className={`text-2xl font-bold mb-4 ${plan.highlight ? 'text-[var(--primary)]' : 'text-white'}`}>{plan.price}</div>
                 <ul className="text-gray-300 text-sm mb-4 space-y-2 list-disc list-inside">
                   {plan.features.map((feature, i) => (
                     <li key={i}>{feature}</li>
@@ -107,7 +107,7 @@ const PlanModal = ({ isOpen, onClose, currentPlan, onSelectPlan }) => (
                   </button>
                 ) : (
                   <button
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors text-base ${plan.highlight ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-gray-700 hover:bg-gray-800 text-white'}`}
+                    className={`px-4 py-2 rounded-lg font-bold transition-colors text-base ${plan.highlight ? 'bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-black' : 'bg-gray-700 hover:bg-gray-800 text-white'}`}
                     onClick={() => onSelectPlan && onSelectPlan(plan.id)}
                   >
                     {plan.button}

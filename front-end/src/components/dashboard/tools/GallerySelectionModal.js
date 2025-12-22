@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Video, Image as ImageIcon } from 'lucide-react';
+import { X, Video, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import safeLocalStorage from '../../../utils/localStorage';
 
 const GallerySelectionModal = ({ onClose, onFileSelect }) => {
@@ -91,7 +91,7 @@ const GallerySelectionModal = ({ onClose, onFileSelect }) => {
 
         <div className="flex-1 overflow-y-auto p-6">
           {loading && <div className="text-center text-gray-400">Loading...</div>}
-          {error && <div className="text-center text-red-400">{error}</div>}
+          {error && <div className="text-center text-[var(--primary)]">{error}</div>}
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {activeTab === 'images' && images.map(image => (
