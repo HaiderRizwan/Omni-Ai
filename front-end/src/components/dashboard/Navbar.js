@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import HeroGraphic from "./HeroGraphic";
 
-const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect, onSettingsClick, onNewChat }) => {
+const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect, onSettingsClick, onNewChat, onMobileMenuToggle }) => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -144,14 +144,23 @@ const Navbar = ({ user, onLogout, activeTool, allHistories, onToolSelect, onSett
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur">
       <div className="mx-auto max-w-full px-6 py-4">
         <div className="flex items-center justify-between">
-          {/* Left Section - Logo & Breadcrumb */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 relative overflow-hidden rounded-xl bg-white/5 border border-white/10 shadow-lg shadow-[var(--primary)]/10">
+          {/* Left Section - Hamburger for mobile + Logo & Breadcrumb */}
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Mobile Hamburger Menu */}
+            <button
+              onClick={onMobileMenuToggle}
+              className="p-2 text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors md:hidden touch-target"
+              aria-label="Open menu"
+            >
+              <Menu size={22} />
+            </button>
+
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="h-8 w-8 md:h-10 md:w-10 relative overflow-hidden rounded-lg md:rounded-xl bg-white/5 border border-white/10 shadow-lg shadow-[var(--primary)]/10">
                 <div className="absolute inset-0 bg-black/40" />
                 <HeroGraphic className="w-full h-full scale-110" />
               </div>
-              <span className="text-xl font-bold tracking-widest text-white font-heading uppercase">
+              <span className="text-lg md:text-xl font-bold tracking-widest text-white font-heading uppercase hidden sm:inline">
                 OMNI AI
               </span>
             </div>

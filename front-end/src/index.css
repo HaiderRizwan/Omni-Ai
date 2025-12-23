@@ -20,15 +20,16 @@ body {
   --surface: #000000;
   --surface-2: #0A0A0A;
   --surface-3: #141414;
-  --border: rgba(255,255,255,0.06);
+  --border: rgba(255, 255, 255, 0.06);
   --text: #F0F0F0;
   --muted: #888888;
-  
-  --primary: #CCFF00; /* Hyper Lime */
+
+  --primary: #CCFF00;
+  /* Hyper Lime */
   --primary-700: #99CC00;
   --accent: #CCFF00;
   --accent-glow: rgba(204, 255, 0, 0.4);
-  
+
   --success: #CCFF00;
   --warning: #FFD600;
   --danger: #FF3333;
@@ -42,7 +43,12 @@ body {
 }
 
 /* Typography Overrides */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   @apply font-heading tracking-tight;
 }
 
@@ -50,10 +56,14 @@ h1, h2, h3, h4, h5, h6 {
 .bg-noise {
   position: relative;
 }
+
 .bg-noise::before {
   content: "";
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   opacity: 0.03;
   pointer-events: none;
@@ -70,13 +80,15 @@ h1, h2, h3, h4, h5, h6 {
 .ui-card {
   @apply bg-noir-800/50 backdrop-blur-md border border-white/5 rounded-2xl transition-all duration-300;
 }
+
 .ui-card:hover {
-  @apply border-white/10 shadow-[0_4px_24px_-12px_rgba(0,0,0,0.5)];
+  @apply border-white/10 shadow-lg;
 }
 
 .ui-input {
   @apply w-full rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all font-sans;
 }
+
 .ui-input-sm {
   @apply rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all font-sans text-sm;
 }
@@ -85,9 +97,11 @@ h1, h2, h3, h4, h5, h6 {
 .ui-btn {
   @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all font-medium active:scale-95;
 }
+
 .ui-btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 bg-[var(--primary)] text-black hover:bg-[var(--primary-700)] transition-all font-bold tracking-wide active:scale-95 shadow-[0_0_15px_rgba(204,255,0,0.2)];
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 bg-[var(--primary)] text-black hover:bg-[var(--primary-700)] transition-all font-bold tracking-wide active:scale-95 shadow-md;
 }
+
 .ui-icon-btn {
   @apply rounded-xl p-2 text-white/60 hover:bg-white/10 hover:text-[var(--primary)] transition-all active:scale-90;
 }
@@ -96,6 +110,7 @@ h1, h2, h3, h4, h5, h6 {
 .ui-row {
   @apply w-full flex items-center gap-3 px-3 py-2 rounded-lg text-white/70 hover:bg-white/5 hover:text-white transition-all;
 }
+
 .ui-row-strong {
   @apply w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-black bg-[var(--primary)] hover:brightness-110 transition-all font-bold;
 }
@@ -109,6 +124,7 @@ select.ui-input {
   color: var(--text);
   @apply backdrop-blur-xl;
 }
+
 select option {
   background-color: #0A0A0A;
   color: #F0F0F0;
@@ -119,17 +135,21 @@ select option {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
+
 *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
 *::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 99px;
 }
+
 *::-webkit-scrollbar-thumb:hover {
   background: var(--primary);
 }
@@ -142,6 +162,145 @@ select option {
 .text-gradient {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50;
 }
+
 .text-gradient-primary {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-[var(--primary)] to-emerald-400;
+}
+
+/* ========================================
+   MOBILE RESPONSIVENESS UTILITIES
+   ======================================== */
+
+/* Mobile-specific CSS variables */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-w: 0rem;
+    /* Sidebar hidden on mobile */
+    --header-h: 56px;
+    --mobile-padding: 1rem;
+    --touch-target: 44px;
+    /* Minimum touch target size */
+  }
+}
+
+/* Touch-friendly utilities */
+.touch-target {
+  min-height: var(--touch-target, 44px);
+  min-width: var(--touch-target, 44px);
+}
+
+/* Mobile visibility utilities */
+.hide-mobile {
+  @apply hidden md:block;
+}
+
+.show-mobile {
+  @apply block md:hidden;
+}
+
+.hide-mobile-flex {
+  @apply hidden md:flex;
+}
+
+.show-mobile-flex {
+  @apply flex md:hidden;
+}
+
+/* Mobile typography scale */
+@media (max-width: 768px) {
+  h1 {
+    @apply text-3xl;
+  }
+
+  h2 {
+    @apply text-2xl;
+  }
+
+  h3 {
+    @apply text-xl;
+  }
+
+  p {
+    @apply text-base;
+  }
+}
+
+/* Mobile-friendly inputs */
+@media (max-width: 768px) {
+
+  .ui-input,
+  .ui-input-sm {
+    @apply py-3 px-4 text-base;
+    /* Larger tap targets */
+  }
+
+  .ui-btn,
+  .ui-btn-primary {
+    @apply py-3 px-6 text-base;
+    /* Larger buttons */
+  }
+}
+
+/* Mobile drawer overlay */
+.mobile-drawer-backdrop {
+  @apply fixed inset-0 bg-black/80 backdrop-blur-sm z-[200];
+}
+
+.mobile-drawer {
+  @apply fixed top-0 left-0 h-full w-[85%] max-w-[320px] bg-noir-900 border-r border-white/10 z-[210] shadow-2xl;
+  transform: translateX(-100%);
+  transition: transform 0.3s var(--ease-out);
+}
+
+.mobile-drawer.open {
+  transform: translateX(0);
+}
+
+/* Mobile-friendly cards */
+@media (max-width: 768px) {
+  .ui-card {
+    @apply rounded-xl p-4;
+  }
+}
+
+/* Mobile grid helpers */
+.mobile-stack {
+  @apply flex flex-col gap-4 md:flex-row;
+}
+
+.mobile-full {
+  @apply w-full md:w-auto;
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Prevent zoom on input focus (iOS) */
+@media (max-width: 768px) {
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Mobile message bubbles */
+@media (max-width: 768px) {
+  .message-bubble {
+    @apply max-w-[90%] px-3 py-2 text-sm;
+  }
+}
+
+/* Mobile-friendly modal */
+.mobile-modal {
+  @apply fixed inset-0 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2;
+  @apply w-full h-full md:w-auto md:h-auto md:max-w-lg md:max-h-[90vh];
+  @apply rounded-none md:rounded-2xl;
 }

@@ -20,19 +20,19 @@ function Navbar({ currentView, onNavigate }) {
 
 	return (
 		<nav className="sticky top-0 z-[100] border-b border-white/5 bg-noir-800/80 backdrop-blur-xl">
-			<div className="relative mx-auto flex max-w-7xl items-center justify-between px-6 h-20">
+			<div className="relative mx-auto flex max-w-7xl items-center justify-between px-4 md:px-6 h-16 md:h-20">
 				<motion.button
 					onClick={() => onNavigate('home')}
-					className="flex items-center gap-3 group bg-transparent border-0 cursor-pointer"
+					className="flex items-center gap-2 md:gap-3 group bg-transparent border-0 cursor-pointer"
 					initial={{ opacity: 0, x: -20 }}
 					animate={{ opacity: 1, x: 0 }}
 					transition={{ duration: 0.5, ease: 'circOut' }}
 				>
-					<div className="relative h-10 w-10 overflow-hidden rounded-xl bg-white/5 border border-white/10 group-hover:border-[var(--primary)]/50 transition-colors shadow-lg shadow-[var(--primary)]/10">
+					<div className="relative h-8 w-8 md:h-10 md:w-10 overflow-hidden rounded-lg md:rounded-xl bg-white/5 border border-white/10 group-hover:border-[var(--primary)]/50 transition-colors shadow-lg shadow-[var(--primary)]/10">
 						<div className="absolute inset-0 bg-black/40" />
 						<HeroGraphic className="w-full h-full scale-110" />
 					</div>
-					<span className="font-heading text-xl font-bold tracking-widest text-white group-hover:text-[var(--primary)] transition-colors uppercase">OMNI AI</span>
+					<span className="font-heading text-lg md:text-xl font-bold tracking-widest text-white group-hover:text-[var(--primary)] transition-colors uppercase hidden sm:inline">OMNI AI</span>
 				</motion.button>
 
 				{/* Desktop Center Nav */}
@@ -68,12 +68,12 @@ function Navbar({ currentView, onNavigate }) {
 						{dark ? <Moon size={20} /> : <Sun size={20} />}
 					</button>
 					<button onClick={() => setAuthModal({ isOpen: true, mode: 'login' })} className="text-sm font-semibold text-white/90 hover:text-[var(--primary)] transition-colors px-4 py-2">Log in</button>
-					<button onClick={() => setAuthModal({ isOpen: true, mode: 'signup' })} className="ui-btn-primary text-sm shadow-[0_0_20px_rgba(204,255,0,0.15)] hover:shadow-[0_0_30px_rgba(204,255,0,0.3)]">Get Started</button>
+					<button onClick={() => setAuthModal({ isOpen: true, mode: 'signup' })} className="ui-btn-primary text-sm shadow-md hover:shadow-lg">Get Started</button>
 				</div>
 
 				{/* Mobile hamburger */}
-				<button aria-label="Open menu" className="md:hidden p-2 text-white/70 hover:text-white transition-colors" onClick={() => setMobileOpen(true)}>
-					<Menu size={24} />
+				<button aria-label="Open menu" className="md:hidden p-2 text-white/70 hover:text-white transition-colors touch-target" onClick={() => setMobileOpen(true)}>
+					<Menu size={22} />
 				</button>
 			</div>
 
@@ -82,14 +82,16 @@ function Navbar({ currentView, onNavigate }) {
 				{mobileOpen && (
 					<>
 						<motion.div
-							className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm"
+							className="fixed inset-0 z-[150]"
+							style={{ backgroundColor: '#000000' }}
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 							exit={{ opacity: 0 }}
 							onClick={() => setMobileOpen(false)}
 						/>
 						<motion.aside
-							className="fixed right-0 top-0 z-[160] h-full w-[85%] max-w-sm bg-[#0A0A0A] border-l border-white/10 p-6 shadow-2xl"
+							className="fixed inset-0 z-[160] min-h-screen w-full sm:w-[85%] sm:max-w-sm sm:left-auto p-6 shadow-2xl overflow-y-auto"
+							style={{ backgroundColor: '#0A0A0A' }}
 							initial={{ x: '100%' }}
 							animate={{ x: 0 }}
 							exit={{ x: '100%' }}

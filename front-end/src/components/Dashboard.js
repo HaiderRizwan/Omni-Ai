@@ -21,6 +21,7 @@ function Dashboard({ user, onLogout }) {
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [availablePlans, setAvailablePlans] = useState([]);
   const [currentPlanAlias, setCurrentPlanAlias] = useState('free');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Handler for adding avatars to collection
   const handleAddToCollection = (avatar, isAdded) => {
@@ -542,6 +543,7 @@ function Dashboard({ user, onLogout }) {
         onToolSelect={handleToolSelect}
         onNewChat={() => handleNewChat('chat')}
         onSettingsClick={handleSettingsClick}
+        onMobileMenuToggle={() => setIsMobileSidebarOpen(true)}
       />
       {/* Main Layout */}
       <div className="flex-1 flex h-screen overflow-hidden pt-[72px]">
@@ -554,14 +556,14 @@ function Dashboard({ user, onLogout }) {
           onChatSelect={handleChatSelect}
           onCreateNewChat={handleNewChat}
           onDeleteChat={handleDeleteChat}
-          user={currentUser}
-          onUserUpdate={handleUserUpdate}
           onLogout={onLogout}
           onSettingsClick={handleSettingsClick}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={() => setIsMobileSidebarOpen(false)}
         />
 
-        {/* Main Panel */}
-        <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-spring" style={{ marginLeft: 'var(--sidebar-w, 16rem)' }}>
+        {/* Main Panel - Full width on mobile, offset on desktop */}
+        <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-spring ml-0 md:ml-[var(--sidebar-w,16rem)]">
           <MainPanel
             activeTool={activeTool}
             currentChat={currentChat}

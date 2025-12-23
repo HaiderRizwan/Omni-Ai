@@ -37,7 +37,7 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
         body: JSON.stringify(
           mode === 'login'
             ? {
-              identifier: formData.email, // Backend expects 'identifier' for login
+              identifier: formData.email,
               password: formData.password
             }
             : {
@@ -53,18 +53,12 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
       const data = await response.json();
 
       if (data.success) {
-        // Store user data and token
         safeLocalStorage.setItem('user', JSON.stringify(data.data.user));
         safeLocalStorage.setItem('token', data.data.token);
-
-        // Close modal and trigger parent update
         onClose();
         setFormData({ email: '', password: '', confirmPassword: '', name: '' });
-
-        // Trigger page reload to show dashboard
         window.location.reload();
       } else {
-        // Show detailed validation errors
         if (data.errors && data.errors.length > 0) {
           const errorMessages = data.errors.map(err => `${err.field}: ${err.message}`).join('\n');
           try { (window.__toast?.push || (() => { }))({ message: `Validation failed:\n${errorMessages}`, type: 'error' }); } catch (_) { }
@@ -103,44 +97,49 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
     <AnimatePresence>
       {isOpen && (
         <>
+          {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[200]"
+            style={{ backgroundColor: '#000000' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
+
+          {/* Modal - Full screen on mobile, centered on desktop */}
           <motion.div
-            className="fixed left-1/2 top-1/2 z-[210] w-full max-w-md -translate-x-1/2 -translate-y-1/2 px-4"
-            initial={{ opacity: 0, scale: 0.95, y: -20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="fixed inset-0 z-[210] min-h-screen w-full md:inset-auto md:left-1/2 md:top-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:min-h-0 md:px-4"
+            style={{ backgroundColor: '#0A0A0A' }}
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           >
-            <div className="relative rounded-3xl border border-white/10 bg-[#0A0A0A] p-8 shadow-2xl overflow-hidden">
-              {/* Noise & Glow */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--primary)]/10 blur-[80px] rounded-full pointer-events-none" />
+            <div className="relative h-full md:h-auto md:rounded-3xl md:border md:border-white/10 p-5 md:p-8 md:shadow-2xl overflow-y-auto">
+              {/* Glow */}
+              <div className="absolute top-0 right-0 w-48 md:w-64 h-48 md:h-64 bg-[var(--primary)]/10 blur-[60px] md:blur-[80px] rounded-full pointer-events-none" />
 
               {/* Header */}
-              <div className="relative z-10 mb-8 flex items-center justify-between">
+              <div className="relative z-10 mb-5 md:mb-8 flex items-start justify-between">
                 <div>
-                  <h2 className="text-3xl font-heading font-bold text-white mb-1">
+                  <h2 className="text-2xl md:text-3xl font-heading font-bold text-white mb-1">
                     {mode === 'login' ? 'Welcome Back' : 'Create Account'}
                   </h2>
-                  <p className="text-sm text-white/50">
-                    {mode === 'login' ? 'Enter your credentials to access your workspace.' : 'Join the elite creative network today.'}
+                  <p className="text-xs md:text-sm text-white/50">
+                    {mode === 'login' ? 'Enter your credentials to access your workspace.' : 'Join the elite creative network.'}
                   </p>
                 </div>
                 <button
                   onClick={onClose}
-                  className="rounded-full p-2 text-white/40 transition hover:bg-white/5 hover:text-white"
+                  className="rounded-full p-2 text-white/40 transition hover:bg-white/5 hover:text-white touch-target"
                 >
                   <X size={20} />
                 </button>
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="relative z-10 space-y-5">
+              <form onSubmit={handleSubmit} className="relative z-10 space-y-4 md:space-y-5">
                 {mode === 'signup' && (
                   <div>
                     <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-white/40">
@@ -153,7 +152,7 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 py-3 md:py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans text-base"
                         placeholder="John Doe"
                         required={mode === 'signup'}
                       />
@@ -172,7 +171,7 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
                       name="email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 py-3 md:py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans text-base"
                       placeholder="name@company.com"
                       required
                     />
@@ -190,14 +189,14 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
                       name="password"
                       value={formData.password}
                       onChange={handleInputChange}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-12 py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-12 py-3 md:py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans text-base"
                       placeholder="••••••••"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors touch-target"
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -216,14 +215,14 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
                         name="confirmPassword"
                         value={formData.confirmPassword}
                         onChange={handleInputChange}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-12 py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-12 pr-12 py-3 md:py-3.5 text-white placeholder-white/20 focus:border-[var(--primary)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/50 transition-all font-sans text-base"
                         placeholder="••••••••"
                         required={mode === 'signup'}
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors touch-target"
                       >
                         {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
@@ -249,7 +248,7 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full mt-4 rounded-xl bg-[var(--primary)] text-black py-4 font-bold text-lg hover:bg-[var(--primary-700)] transition-all shadow-[0_0_20px_rgba(204,255,0,0.15)] disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98]"
+                  className="w-full mt-4 rounded-xl bg-[var(--primary)] text-black py-3 md:py-4 font-bold text-base md:text-lg hover:bg-[var(--primary-700)] transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98] touch-target"
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center gap-2">
@@ -263,12 +262,12 @@ function AuthModal({ isOpen, onClose, mode = 'login' }) {
               </form>
 
               {/* Footer */}
-              <div className="relative z-10 mt-8 pt-6 border-t border-white/5">
+              <div className="relative z-10 mt-6 md:mt-8 pt-5 md:pt-6 border-t border-white/5">
                 {mode === 'login' && (
                   <button
                     type="button"
                     onClick={handleGoogleLogin}
-                    className="mb-6 flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 py-3.5 font-medium text-white transition hover:bg-white/10 hover:border-white/20"
+                    className="mb-5 md:mb-6 flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 py-3 md:py-3.5 font-medium text-white transition hover:bg-white/10 hover:border-white/20 touch-target"
                   >
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5" />
                     Continue with Google

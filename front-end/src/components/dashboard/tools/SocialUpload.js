@@ -160,11 +160,11 @@ function SocialUpload() {
       <div className="flex-1 overflow-y-auto custom-scrollbar">
 
         {activeTab === 'youtube' && (
-          <div className="h-full flex flex-col lg:flex-row gap-6">
+          <div className="h-full flex flex-col lg:flex-row gap-4 md:gap-6 p-4 md:p-6">
 
             {/* Left Column: Media Preview (40%) */}
             <div className="w-full lg:w-[40%] flex flex-col gap-4">
-              <div className="flex-1 bg-neutral-900 border-2 border-dashed border-white/10 rounded-2xl relative group hover:border-white/20 transition-all overflow-hidden flex flex-col items-center justify-center p-8">
+              <div className="min-h-[200px] md:min-h-[300px] flex-1 bg-neutral-900 border-2 border-dashed border-white/10 rounded-xl md:rounded-2xl relative group hover:border-white/20 transition-all overflow-hidden flex flex-col items-center justify-center p-6 md:p-8">
 
                 {file || selectedFileUrl ? (
                   <div className="w-full h-full flex flex-col items-center justify-center">
@@ -224,7 +224,7 @@ function SocialUpload() {
             </div>
 
             {/* Right Column: Metadata Details (60%) */}
-            <div className="w-full lg:w-[60%] bg-neutral-900 border border-white/5 rounded-2xl p-6 lg:p-8 flex flex-col">
+            <div className="w-full lg:w-[60%] bg-neutral-900 border border-white/5 rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 flex flex-col">
               <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <FileText size={18} className="text-gray-400" /> Video Details
               </h3>

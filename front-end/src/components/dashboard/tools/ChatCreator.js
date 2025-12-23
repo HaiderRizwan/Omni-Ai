@@ -470,16 +470,16 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
       )}
 
       {/* Composer */}
-      <div className="p-6 border-t border-white/5 shrink-0 fixed bottom-0 right-0 z-40 bg-noir-900/90 backdrop-blur-xl" style={{ left: 'var(--sidebar-w, 16rem)' }}>
-        {/* Quick prompts */}
-        <div className="flex flex-wrap gap-2 mb-3">
+      <div className="p-4 md:p-6 border-t border-white/5 shrink-0 fixed bottom-0 left-0 right-0 md:left-[var(--sidebar-w,16rem)] z-40 bg-noir-900/90 backdrop-blur-xl">
+        {/* Quick prompts - hidden on mobile */}
+        <div className="hidden md:flex flex-wrap gap-2 mb-3">
           {quickPrompts.map((p, i) => (
             <button key={i} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors" onClick={() => setInputMessage(p)} title="Insert prompt">
               {p}
             </button>
           ))}
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-2 md:gap-3 items-center">
           {/* Attach */}
           <div>
             <input
@@ -582,15 +582,15 @@ const ChatCreator = ({ currentChat, onChatUpdate }) => {
             </button>
           </div>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-w-0">
             <textarea
               ref={inputRef}
               rows={1}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder="Message Omni…  (Enter to send, Shift+Enter for newline)"
-              className="w-full p-4 pr-14 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all resize-none max-h-40"
+              placeholder="Message Omni…"
+              className="w-full p-3 md:p-4 pr-12 md:pr-14 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all resize-none max-h-40 text-base"
               disabled={isLoading}
             />
             <button

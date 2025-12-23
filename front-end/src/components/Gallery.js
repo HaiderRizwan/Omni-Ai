@@ -100,31 +100,31 @@ function Gallery() {
   };
 
   return (
-    <section className="min-h-screen bg-noir-900 py-24 relative overflow-hidden" id="community">
+    <section className="min-h-screen bg-noir-900 py-16 md:py-24 relative overflow-hidden px-4 md:px-6" id="community">
       {/* Background Gradients */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-gradient-to-b from-noir-800 to-transparent opacity-50 pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[300px] md:h-[500px] bg-gradient-to-b from-noir-800 to-transparent opacity-50 pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto px-6 relative z-10">
+      <div className="max-w-7xl mx-auto relative z-10">
         <motion.div
-          className="text-center mb-16"
+          className="text-center mb-10 md:mb-16 px-4"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-[var(--primary)] mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-[var(--primary)] mb-4 md:mb-6">
             <TrendingUp size={14} />
             <span>Community Showcase</span>
           </div>
-          <h2 className="text-5xl md:text-6xl font-heading font-black tracking-tighter text-white mb-6">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-black tracking-tighter text-white mb-4 md:mb-6">
             TRENDING <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary)] to-emerald-400">CREATIONS</span>
           </h2>
-          <p className="text-xl text-white/50 max-w-2xl mx-auto font-light">
+          <p className="text-base md:text-xl text-white/50 max-w-2xl mx-auto font-light">
             Discover precision-engineered artwork from our elite creative network.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
           {images.map((image, idx) => (
             <motion.div
               key={image.id}
@@ -167,14 +167,14 @@ function Gallery() {
                 />
               </div>
 
-              <div className="p-5">
-                <h3 className="font-heading font-bold text-lg text-white mb-3 group-hover:text-[var(--primary)] transition-colors truncate">{image.title}</h3>
+              <div className="p-3 md:p-5">
+                <h3 className="font-heading font-bold text-sm md:text-lg text-white mb-2 md:mb-3 group-hover:text-[var(--primary)] transition-colors truncate">{image.title}</h3>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold px-2 py-1 rounded bg-white/5 text-white/70 border border-white/5 group-hover:border-[var(--primary)]/30 transition-colors">
+                  <span className="text-[10px] md:text-xs font-semibold px-2 py-1 rounded bg-white/5 text-white/70 border border-white/5 group-hover:border-[var(--primary)]/30 transition-colors">
                     {image.category}
                   </span>
-                  <span className="flex items-center gap-1 text-xs font-medium text-white/50">
-                    <Heart size={12} className={image.likes > 1500 ? "text-[var(--primary)] fill-[var(--primary)]" : ""} />
+                  <span className="flex items-center gap-1 text-[10px] md:text-xs font-medium text-white/50">
+                    <Heart size={10} className={image.likes > 1500 ? "text-[var(--primary)] fill-[var(--primary)]" : ""} />
                     {formatNumber(image.likes)}
                   </span>
                 </div>

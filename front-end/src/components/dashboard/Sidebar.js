@@ -43,6 +43,8 @@ const Sidebar = ({
   onUserUpdate,
   onLogout,
   onSettingsClick,
+  isMobileOpen = false,
+  onMobileClose = () => { },
 }) => {
   const { theme, isDark } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -567,236 +569,259 @@ const Sidebar = ({
     .flatMap((tool) => getChatsInBackendOrder(tool.id));
 
   return (
-    <motion.div
-      animate={{ width: isCollapsed ? 64 : 256 }}
-      transition={{ type: "spring", stiffness: 260, damping: 26 }}
-      style={{ width: "var(--sidebar-w, 16rem)" }}
-      className={`border-r border-white/5 flex flex-col fixed top-[72px] left-0 bottom-0 overflow-y-auto custom-scrollbar bg-noir-900 z-40`}
-    >
-      <SearchChatModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        chats={allServerChatsForDisplay}
-        onChatSelect={(chat) => {
-          // Find which tool this chat belongs to
-          const tool = tools.find(t => t.id === chat.toolId) ||
-            // Auto-detect tool from ID or metadata if possible, for now default to chat
-            tools[0];
-
-          if (chat.toolId && onChatSelect) {
-            onChatSelect(chat.toolId, chat.id);
-          } else if (onChatSelect) {
-            onChatSelect(tool.id, chat.id);
-          }
-        }}
-      />
-
-      {/* Search Modal Integration Logic needs to map toolId correctly. */}
-      {/* Let's fix lines 548-552 above first in a subsequent edit or do it now. */}
-      {/* Actually I'll do it right here in the replacement. */}
-
-      {/* Essentials (sticky) */}
-      {!isCollapsed && (
-        <div className="px-3 md:px-4 py-4 sticky top-0 z-20 bg-noir-900 border-b border-white/5">
-          <div className="space-y-1">
-
-            <button
-              onClick={() => onCreateNewChat("chat")}
-              className="ui-row-strong"
-              title="New chat"
-            >
-              <Plus className="w-4 h-4" /> New chat
-            </button>
-            <button onClick={() => onToolSelect("image")} className="ui-row">
-              <Image className="w-4 h-4" /> Image Creation
-            </button>
-            <button onClick={() => onToolSelect("video")} className="ui-row">
-              <Video className="w-4 h-4" /> Video Creation
-            </button>
-            <button onClick={() => onToolSelect("avatar")} className="ui-row">
-              <User className="w-4 h-4" /> Avatar Creation
-            </button>
-            <button
-              onClick={() => onToolSelect("socialUpload")}
-              className="ui-row"
-            >
-              <Share2 className="w-4 h-4" /> Upload to Socials
-            </button>
-            <button onClick={() => onToolSelect("explore")} className="ui-row">
-              <Compass className="w-4 h-4" /> Explore
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Secondary shortcuts under sticky (non-sticky) */}
-      {!isCollapsed && (
-        <div className="px-3 md:px-4 pb-2 pt-1">
-          <div className="space-y-1">
-            <button onClick={() => onToolSelect("gallery")} className="ui-row">
-              <Images className="w-4 h-4" /> Image Gallery
-            </button>
-            <button
-              onClick={() => onToolSelect("avatarsGallery")}
-              className="ui-row"
-            >
-              <User className="w-4 h-4" /> Avatars Gallery
-            </button>
-            <button
-              onClick={() => onToolSelect("videoGallery")}
-              className="ui-row"
-            >
-              <PlayCircle className="w-4 h-4" /> My Videos
-            </button>
-            <button onClick={() => onToolSelect("currency")} className="ui-row">
-              <DollarSign className="w-4 h-4" /> Currency
-            </button>
-
-          </div>
-        </div>
-      )}
-
-      {/* Chat History Section (GPT-like) */}
-      <div className={`flex-1 ${isCollapsed ? "overflow-hidden" : ""}`}>
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
         <div
-          className={`p-2 md:p-4 pt-2 transition-opacity ${isCollapsed ? "opacity-0 pointer-events-none select-none" : "opacity-100"}`}
-        >
-          <div className="text-xs text-gray-400 mb-2">Chats</div>
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[190] md:hidden"
+          onClick={onMobileClose}
+        />
+      )}
 
-          {/* Chat Histories by Tool */}
-          {tools
-            .filter((t) =>
-              ["chat", "image", "video", "avatar", "avatarVideo"].includes(
-                t.id,
-              ),
-            )
-            .map((tool) => {
-              const history = getChatsInBackendOrder(tool.id);
-              if (history.length === 0) return null;
+      {/* Sidebar Container */}
+      <motion.div
+        animate={{ width: isCollapsed ? 64 : 256 }}
+        transition={{ type: "spring", stiffness: 260, damping: 26 }}
+        style={{ width: "var(--sidebar-w, 16rem)" }}
+        className={`
+          border-r border-white/5 flex flex-col fixed top-[72px] left-0 bottom-0 overflow-y-auto custom-scrollbar bg-noir-900 z-[200]
+          ${/* Mobile: Hide by default, show as drawer when open */''}        
+          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:translate-x-0
+          transition-transform duration-300 ease-out
+        `}
+      >
+        <SearchChatModal
+          isOpen={isSearchOpen}
+          onClose={() => setIsSearchOpen(false)}
+          chats={allServerChatsForDisplay}
+          onChatSelect={(chat) => {
+            // Find which tool this chat belongs to
+            const tool = tools.find(t => t.id === chat.toolId) ||
+              // Auto-detect tool from ID or metadata if possible, for now default to chat
+              tools[0];
 
-              return (
-                <div key={tool.id} className="mb-6">
-                  <h4 className="text-[10px] uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-2">
-                    <tool.icon className="w-3 h-3" />
-                    {tool.name}
-                  </h4>
-                  <div className="space-y-1">
-                    {history.map((chat, index) => (
-                      <motion.div
-                        key={chat.id}
-                        className="w-full p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-150 group flex items-start gap-2"
-                        whileHover={{ x: 4 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <button
-                          onClick={() => onChatSelect(tool.id, chat.id)}
-                          className="flex-1 text-left"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <p
-                                className="text-sm text-gray-200 truncate"
-                                title={chat.title || `Chat ${index + 1}`}
-                              >
-                                {chat.title || `Chat ${index + 1}`}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {formatDate(chat.timestamp)}
-                              </p>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
-                          </div>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteChat?.(tool.id, chat.id, chat.serverId);
-                          }}
-                          className="p-2 rounded-md bg-gray-800/60 hover:bg-gray-700/70 text-gray-400 hover:text-red-400"
-                          title="Delete chat"
-                        >
-                          <Trash className="w-4 h-4" />
-                        </button>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-
-          {allServerChatsForDisplay.length === 0 && (
-            <div className="text-center py-8">
-              <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">
-                No chat history found on the server.
-              </p>
-              <p className="text-gray-600 text-xs mt-1">
-                Start a conversation to see your history here.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Footer profile */}
-      <div className="px-3 md:px-4 py-3 border-t border-gray-800/50 mt-auto relative">
-        <ProfileDropdown
-          isOpen={showProfileMenu}
-          onClose={() => setShowProfileMenu(false)}
-          user={user}
-          onLogout={onLogout}
-          onSettingsClick={onSettingsClick}
-          positionClass={`bottom-full left-3 mb-2 w-64 ${isCollapsed ? 'left-16 bottom-4' : ''}`}
+            if (chat.toolId && onChatSelect) {
+              onChatSelect(chat.toolId, chat.id);
+            } else if (onChatSelect) {
+              onChatSelect(tool.id, chat.id);
+            }
+          }}
         />
 
-        <div className="mb-3 flex justify-end">
-          <button
-            onClick={() => {
-              const next = !isCollapsed;
-              setIsCollapsed(next);
-              try {
-                safeLocalStorage.setItem("sidebarCollapsed", String(next));
-              } catch (_) { }
-            }}
-            className="p-2 text-white/40 hover:text-white transition-colors"
-            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <PanelLeftClose className={`w-4 h-4 ${isCollapsed ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
+        {/* Search Modal Integration Logic needs to map toolId correctly. */}
+        {/* Let's fix lines 548-552 above first in a subsequent edit or do it now. */}
+        {/* Actually I'll do it right here in the replacement. */}
 
-        <button
-          onClick={() => setShowProfileMenu(!showProfileMenu)}
-          className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all duration-200 hover:bg-white/5 border border-transparent hover:border-white/5 group text-left ${showProfileMenu ? 'bg-white/5 border-white/5' : ''}`}
-        >
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[var(--primary)] to-emerald-400 p-[1px] shrink-0">
-            <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
-              {user?.avatar ? (
-                <img src={user.avatar} alt="User" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-5 h-5 text-[var(--primary)]" />
-              )}
+        {/* Essentials (sticky) */}
+        {!isCollapsed && (
+          <div className="px-3 md:px-4 py-4 sticky top-0 z-20 bg-noir-900 border-b border-white/5">
+            <div className="space-y-1">
+
+              <button
+                onClick={() => {
+                  onCreateNewChat("chat");
+                  onMobileClose();
+                }}
+                className="ui-row-strong"
+                title="New chat"
+              >
+                <Plus className="w-4 h-4" /> New chat
+              </button>
+              <button onClick={() => onToolSelect("image")} className="ui-row">
+                <Image className="w-4 h-4" /> Image Creation
+              </button>
+              <button onClick={() => onToolSelect("video")} className="ui-row">
+                <Video className="w-4 h-4" /> Video Creation
+              </button>
+              <button onClick={() => onToolSelect("avatar")} className="ui-row">
+                <User className="w-4 h-4" /> Avatar Creation
+              </button>
+              <button
+                onClick={() => onToolSelect("socialUpload")}
+                className="ui-row"
+              >
+                <Share2 className="w-4 h-4" /> Upload to Socials
+              </button>
+              <button onClick={() => onToolSelect("explore")} className="ui-row">
+                <Compass className="w-4 h-4" /> Explore
+              </button>
             </div>
           </div>
+        )}
 
-          {!isCollapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate group-hover:text-[var(--primary)] transition-colors">
-                {user?.firstName || user?.username || "User"}
-              </p>
-              <p className="text-xs text-gray-400 capitalize">
-                {subscriptionStatus === 'active' ? 'Pro Plan' : subscriptionStatus}
-              </p>
+        {/* Secondary shortcuts under sticky (non-sticky) */}
+        {!isCollapsed && (
+          <div className="px-3 md:px-4 pb-2 pt-1">
+            <div className="space-y-1">
+              <button onClick={() => onToolSelect("gallery")} className="ui-row">
+                <Images className="w-4 h-4" /> Image Gallery
+              </button>
+              <button
+                onClick={() => onToolSelect("avatarsGallery")}
+                className="ui-row"
+              >
+                <User className="w-4 h-4" /> Avatars Gallery
+              </button>
+              <button
+                onClick={() => onToolSelect("videoGallery")}
+                className="ui-row"
+              >
+                <PlayCircle className="w-4 h-4" /> My Videos
+              </button>
+              <button onClick={() => onToolSelect("currency")} className="ui-row">
+                <DollarSign className="w-4 h-4" /> Currency
+              </button>
+
             </div>
-          )}
+          </div>
+        )}
 
-          {!isCollapsed && (
-            <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${showProfileMenu ? '-rotate-90' : 'rotate-90'}`} />
-          )}
-        </button>
-      </div>
-    </motion.div>
+        {/* Chat History Section (GPT-like) */}
+        <div className={`flex-1 ${isCollapsed ? "overflow-hidden" : ""}`}>
+          <div
+            className={`p-2 md:p-4 pt-2 transition-opacity ${isCollapsed ? "opacity-0 pointer-events-none select-none" : "opacity-100"}`}
+          >
+            <div className="text-xs text-gray-400 mb-2">Chats</div>
+
+            {/* Chat Histories by Tool */}
+            {tools
+              .filter((t) =>
+                ["chat", "image", "video", "avatar", "avatarVideo"].includes(
+                  t.id,
+                ),
+              )
+              .map((tool) => {
+                const history = getChatsInBackendOrder(tool.id);
+                if (history.length === 0) return null;
+
+                return (
+                  <div key={tool.id} className="mb-6">
+                    <h4 className="text-[10px] uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-2">
+                      <tool.icon className="w-3 h-3" />
+                      {tool.name}
+                    </h4>
+                    <div className="space-y-1">
+                      {history.map((chat, index) => (
+                        <motion.div
+                          key={chat.id}
+                          className="w-full p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-150 group flex items-start gap-2"
+                          whileHover={{ x: 4 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <button
+                            onClick={() => {
+                              onChatSelect(tool.id, chat.id);
+                              onMobileClose(); // Close sidebar on mobile after selection
+                            }}
+                            className="flex-1 text-left"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <p
+                                  className="text-sm text-gray-200 truncate"
+                                  title={chat.title || `Chat ${index + 1}`}
+                                >
+                                  {chat.title || `Chat ${index + 1}`}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {formatDate(chat.timestamp)}
+                                </p>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+                            </div>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteChat?.(tool.id, chat.id, chat.serverId);
+                            }}
+                            className="p-2 rounded-md bg-gray-800/60 hover:bg-gray-700/70 text-gray-400 hover:text-red-400"
+                            title="Delete chat"
+                          >
+                            <Trash className="w-4 h-4" />
+                          </button>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+            {allServerChatsForDisplay.length === 0 && (
+              <div className="text-center py-8">
+                <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">
+                  No chat history found on the server.
+                </p>
+                <p className="text-gray-600 text-xs mt-1">
+                  Start a conversation to see your history here.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer profile */}
+        <div className="px-3 md:px-4 py-3 border-t border-gray-800/50 mt-auto relative">
+          <ProfileDropdown
+            isOpen={showProfileMenu}
+            onClose={() => setShowProfileMenu(false)}
+            user={user}
+            onLogout={onLogout}
+            onSettingsClick={onSettingsClick}
+            positionClass={`bottom-full left-3 mb-2 w-64 ${isCollapsed ? 'left-16 bottom-4' : ''}`}
+          />
+
+          <div className="mb-3 flex justify-end">
+            <button
+              onClick={() => {
+                const next = !isCollapsed;
+                setIsCollapsed(next);
+                try {
+                  safeLocalStorage.setItem("sidebarCollapsed", String(next));
+                } catch (_) { }
+              }}
+              className="p-2 text-white/40 hover:text-white transition-colors"
+              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <PanelLeftClose className={`w-4 h-4 ${isCollapsed ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all duration-200 hover:bg-white/5 border border-transparent hover:border-white/5 group text-left ${showProfileMenu ? 'bg-white/5 border-white/5' : ''}`}
+          >
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[var(--primary)] to-emerald-400 p-[1px] shrink-0">
+              <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="User" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-5 h-5 text-[var(--primary)]" />
+                )}
+              </div>
+            </div>
+
+            {!isCollapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate group-hover:text-[var(--primary)] transition-colors">
+                  {user?.firstName || user?.username || "User"}
+                </p>
+                <p className="text-xs text-gray-400 capitalize">
+                  {subscriptionStatus === 'active' ? 'Pro Plan' : subscriptionStatus}
+                </p>
+              </div>
+            )}
+
+            {!isCollapsed && (
+              <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${showProfileMenu ? '-rotate-90' : 'rotate-90'}`} />
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </>
   );
 };
 

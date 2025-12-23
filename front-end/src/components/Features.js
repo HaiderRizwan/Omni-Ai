@@ -44,25 +44,27 @@ const Features = () => {
     ];
 
     return (
-        <div className="min-h-screen pt-24 pb-20 px-6 bg-black">
+        <div className="min-h-screen pt-20 md:pt-24 pb-16 md:pb-20 px-4 md:px-6 bg-black">
             <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col md:flex-row items-center justify-between mb-24 gap-12">
-                    <div className="flex-1 space-y-6">
-                        <h1 className="text-5xl md:text-7xl font-bold text-white font-heading tracking-tight leading-none">
-                            Unlimitied <br />
+                {/* Hero Section - Stack on mobile */}
+                <div className="flex flex-col md:flex-row items-center justify-between mb-16 md:mb-24 gap-8 md:gap-12">
+                    <div className="flex-1 space-y-4 md:space-y-6 text-center md:text-left">
+                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white font-heading tracking-tight leading-none">
+                            Unlimited <br className="hidden md:block" />
                             <span className="text-[var(--primary)]">Power.</span>
                         </h1>
-                        <p className="text-xl text-white/60 max-w-lg">
+                        <p className="text-base md:text-xl text-white/60 max-w-lg mx-auto md:mx-0">
                             The comprehensive AI suite designed for the next generation of creators.
                             Everything you need, nothing you don't.
                         </p>
                     </div>
-                    <div className="flex-1 h-[400px] w-full relative">
+                    <div className="flex-1 h-[250px] md:h-[400px] w-full relative">
                         <HeroGraphic className="w-full h-full opacity-80" />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {/* Features Grid - Single column on mobile, 2 on tablet, 3 on desktop */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
                     {features.map((feature, i) => (
                         <motion.div
                             key={feature.title}
@@ -70,13 +72,13 @@ const Features = () => {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: i * 0.1 }}
-                            className="bg-neutral-900/50 border border-white/5 p-8 rounded-3xl hover:bg-neutral-900 transition-colors group"
+                            className="bg-neutral-900/50 border border-white/5 p-5 md:p-8 rounded-2xl md:rounded-3xl hover:bg-neutral-900 transition-colors group"
                         >
-                            <div className="bg-white/5 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                <feature.icon size={28} className={feature.color} />
+                            <div className="bg-white/5 w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center mb-4 md:mb-6 group-hover:scale-110 transition-transform">
+                                <feature.icon size={24} className={feature.color} />
                             </div>
-                            <h3 className="text-2xl font-bold text-white mb-3">{feature.title}</h3>
-                            <p className="text-white/50 leading-relaxed">{feature.desc}</p>
+                            <h3 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3">{feature.title}</h3>
+                            <p className="text-sm md:text-base text-white/50 leading-relaxed">{feature.desc}</p>
                         </motion.div>
                     ))}
                 </div>

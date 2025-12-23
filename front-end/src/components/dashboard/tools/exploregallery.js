@@ -21,10 +21,7 @@ const Gallery = () => {
 
   const apiBase = process.env.REACT_APP_API_URL || "http://localhost:3001";
 
-  useEffect(() => {
-    fetchImages();
-  }, [fetchImages]);
-
+  // Define fetchImages BEFORE useEffect
   const fetchImages = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -57,6 +54,10 @@ const Gallery = () => {
       setLoading(false);
     }
   }, [apiBase]);
+
+  useEffect(() => {
+    fetchImages();
+  }, [fetchImages]);
 
   const getImageUrl = (imageId) => {
     return `${apiBase}/api/images/public/${imageId}`;

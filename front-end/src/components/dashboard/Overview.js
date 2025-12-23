@@ -15,7 +15,7 @@ const BentoCard = ({ title, desc, icon: Icon, color, onClick, delay, className, 
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay, duration: 0.5, ease: "easeOut" }}
         onClick={onClick}
-        className={`relative group overflow-hidden rounded-3xl cursor-pointer bg-neutral-900 border border-white/5 hover:border-white/20 transition-all duration-500 ${className}`}
+        className={`relative group overflow-hidden rounded-2xl md:rounded-3xl cursor-pointer bg-neutral-900 border border-white/5 hover:border-white/20 transition-all duration-500 ${className}`}
     >
         {/* Background Image/Gradient */}
         {bgImage ? (
@@ -28,22 +28,22 @@ const BentoCard = ({ title, desc, icon: Icon, color, onClick, delay, className, 
         )}
 
         {/* Content */}
-        <div className="absolute inset-0 p-8 flex flex-col justify-between z-10">
+        <div className="absolute inset-0 p-5 md:p-8 flex flex-col justify-between z-10">
             <div className="flex justify-between items-start">
                 {!bgImage && (
-                    <div className={`w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 group-hover:bg-white/20 transition-colors`}>
-                        <Icon className="w-5 h-5 text-white" />
+                    <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 group-hover:bg-white/20 transition-colors`}>
+                        <Icon className="w-4 h-4 md:w-5 md:h-5 text-white" />
                     </div>
                 )}
                 {bgImage && <div />} {/* Spacer if needed, or just let arrow align right */}
-                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity -rotate-45 group-hover:rotate-0 transform duration-300">
-                    <ArrowRight className="w-4 h-4 text-white" />
+                <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity -rotate-45 group-hover:rotate-0 transform duration-300">
+                    <ArrowRight className="w-3 h-3 md:w-4 md:h-4 text-white" />
                 </div>
             </div>
 
             <div>
-                <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">{title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed max-w-[90%] group-hover:text-gray-200 transition-colors">{desc}</p>
+                <h3 className="text-xl md:text-2xl font-bold text-white mb-1 md:mb-2 tracking-tight">{title}</h3>
+                <p className="text-gray-400 text-xs md:text-sm leading-relaxed max-w-[90%] group-hover:text-gray-200 transition-colors">{desc}</p>
             </div>
         </div>
     </motion.div>
@@ -107,7 +107,7 @@ const Overview = ({ user, onToolSelect }) => {
         <div ref={containerRef} className="h-full overflow-y-auto custom-scrollbar bg-black text-white">
 
             {/* --- HERO SECTION --- */}
-            <section className="relative min-h-[60vh] flex flex-col items-center justify-center text-center px-6 overflow-hidden">
+            <section className="relative min-h-[40vh] md:min-h-[60vh] flex flex-col items-center justify-center text-center px-4 md:px-6 overflow-hidden py-10 md:py-0">
 
                 {/* Animated Background Gradients */}
                 {/* Animated Background Gradients & SVG */}
@@ -119,14 +119,14 @@ const Overview = ({ user, onToolSelect }) => {
                 <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 50, repeat: Infinity, ease: "linear" }}
-                    className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] bg-[var(--primary)] opacity-[0.05] blur-[150px] rounded-full pointer-events-none"
+                    className="absolute top-[-20%] left-[-10%] w-[50vw] md:w-[70vw] h-[50vw] md:h-[70vw] bg-[var(--primary)] opacity-[0.05] blur-[100px] md:blur-[150px] rounded-full pointer-events-none"
                 />
 
-                <div className="relative z-10 max-w-4xl mx-auto space-y-8">
+                <div className="relative z-10 max-w-4xl mx-auto space-y-4 md:space-y-8">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold uppercase tracking-widest text-[var(--primary)] backdrop-blur-md"
+                        className="inline-flex items-center gap-2 px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] md:text-xs font-semibold uppercase tracking-widest text-[var(--primary)] backdrop-blur-md"
                     >
                         <Sparkles className="w-3 h-3" />
                         <span>The Creation Engine</span>
@@ -136,7 +136,7 @@ const Overview = ({ user, onToolSelect }) => {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.8, ease: "circOut" }}
-                        className="text-6xl md:text-8xl font-black tracking-tighter leading-none"
+                        className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-black tracking-tighter leading-none"
                     >
                         DESIGN <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-neutral-200 via-neutral-500 to-neutral-200 animate-gradient-x">THE FUTURE</span>
@@ -146,7 +146,7 @@ const Overview = ({ user, onToolSelect }) => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.3 }}
-                        className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto"
+                        className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-400 max-w-2xl mx-auto"
                     >
                         Welcome, {user?.firstName}. Your imagination is the only limit.
                     </motion.p>
@@ -155,12 +155,12 @@ const Overview = ({ user, onToolSelect }) => {
 
 
             {/* --- BENTO GRID TOOLS --- */}
-            <section className="px-6 md:px-12 pb-20 max-w-[1600px] mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-auto md:h-[600px]">
+            <section className="px-4 md:px-6 lg:px-12 pb-16 md:pb-20 max-w-[1600px] mx-auto">
+                <div className="grid grid-cols-2 md:grid-cols-4 md:grid-rows-2 gap-3 md:gap-4 h-auto md:h-[600px]">
 
                     {/* Main Feature: Chat (Large) */}
                     <BentoCard
-                        className="md:col-span-2 md:row-span-2 bg-[var(--primary)]/5"
+                        className="col-span-2 min-h-[200px] md:min-h-0 md:row-span-2 bg-[var(--primary)]/5"
                         title="AI Companion"
                         desc="More than just chat. Code, write, and analyze with our most advanced model yet."
                         icon={MessageSquare}
